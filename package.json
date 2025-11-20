@@ -1,0 +1,38 @@
+{
+  "name": "@versui/cli",
+  "version": "0.1.0",
+  "description": "Deploy static sites to Walrus decentralized storage",
+  "type": "module",
+  "bin": {
+    "versui": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Versui/versui-cli.git"
+  },
+  "keywords": ["walrus", "sui", "blockchain", "web3", "deployment", "cli"],
+  "author": "",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Versui/versui-cli/issues"
+  },
+  "homepage": "https://github.com/Versui/versui-cli#readme",
+  "dependencies": {
+    "@mysten/sui": "^1.45.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2",
+    "ora": "^9.0.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/prompts": "^2.4.9",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
