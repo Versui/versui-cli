@@ -13,6 +13,7 @@ import logUpdate from 'log-update'
 
 import { hash_content } from '../lib/hash.js'
 import { scan_directory, get_content_type, read_file } from '../lib/files.js'
+import { MIME_TYPES_BROWSER } from '../lib/mime-browser.js'
 
 const WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space'
 const VERSUI_PACKAGE_ID =
@@ -707,7 +708,7 @@ check()})();
 </html>`
 
   const sw = `const A=${agg_json},R=${resources};
-const M={'.js':'text/javascript','.css':'text/css','.html':'text/html','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.ico':'image/x-icon','.woff2':'font/woff2','.woff':'font/woff','.ttf':'font/ttf','.eot':'application/vnd.ms-fontobject'};
+const M=${JSON.stringify(MIME_TYPES_BROWSER)};
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(clients.claim()));
 self.addEventListener('fetch',e=>{
