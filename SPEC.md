@@ -15,6 +15,7 @@ Static files uploaded to Walrus, a decentralized storage network with 100+ nodes
 Sui blockchain stores deployment metadata as on-chain objects using **derived objects** pattern (not dynamic fields).
 
 **Site object:**
+
 ```move
 struct Site has key, store {
   id: UID,
@@ -24,6 +25,7 @@ struct Site has key, store {
 ```
 
 **Resource objects (derived from Site):**
+
 ```move
 struct Resource has key, store {
   id: UID,
@@ -38,6 +40,7 @@ struct Resource has key, store {
 ```
 
 **Advantages of derived objects:**
+
 - Independent resource queries (no need to load entire Site)
 - Parallel fetching (concurrent resource loads)
 - Content-type indexing (query all images, JS files, etc.)
@@ -54,6 +57,7 @@ Service workers enable direct blob fetching from Walrus aggregators, offline ope
 Deploy directory to Walrus with delta upload optimization.
 
 **Options:**
+
 - `-d, --domain <domain>` - Link to SuiNS domain
 - `-e, --epochs <number>` - Storage duration in days (default: 365)
 - `-o, --output <dir>` - Download bootstrap for self-hosting
@@ -61,6 +65,7 @@ Deploy directory to Walrus with delta upload optimization.
 - `--no-delta` - Force full upload (bypass delta detection)
 
 **Process:**
+
 1. Pre-flight checks: Validate directory, check wallet connection
 2. Delta detection: Hash all files, compare with previous manifest, identify changes
 3. Walrus upload: Upload only changed files with progress bar
@@ -74,6 +79,7 @@ Deploy directory to Walrus with delta upload optimization.
 List all deployments owned by connected wallet.
 
 **Output:**
+
 ```
 Object ID          Domain                   Deployed
 0xabc123...        mysite.versui.app       2025-01-20 12:00
@@ -84,18 +90,16 @@ Object ID          Domain                   Deployed
 Manage SuiNS domain linking.
 
 **Subcommands:**
+
 - `link <domain> <site-id>` - Link SuiNS domain to site
 - `unlink <domain>` - Unlink domain
-
-### `versui dev <dir>`
-
-Local development server with service worker simulation (coming soon).
 
 ## Delta Updates
 
 Content-addressed storage enables automatic deduplication:
 
 **First deploy:**
+
 ```bash
 versui deploy ./dist
 → Hash all files
@@ -105,6 +109,7 @@ versui deploy ./dist
 ```
 
 **Update deploy:**
+
 ```bash
 versui deploy ./dist
 → Hash all files
@@ -115,6 +120,7 @@ versui deploy ./dist
 ```
 
 **Manifest format:**
+
 ```json
 {
   "version": 1,
@@ -136,6 +142,7 @@ versui deploy ./dist
 ### Tier 1: No Existing SW (Auto-inject)
 
 Generate universal service worker that:
+
 - Fetches Site object from Sui
 - Queries Resource objects by path (derived object queries)
 - Fetches blobs from Walrus aggregators
@@ -147,7 +154,7 @@ Generate universal service worker that:
 
 ### Tier 2: Workbox Detected (Plugin)
 
-Integrate with existing Workbox service worker via plugin (coming soon).
+**Status:** Not yet implemented. Will integrate with existing Workbox service workers via plugin.
 
 **Detection:** `workbox-*.js` files or Workbox imports
 
@@ -162,6 +169,7 @@ Provide integration guide for custom service workers.
 Each resource's SHA-256 hash stored on-chain alongside blob metadata. Service workers validate fetched content against on-chain hashes before serving, detecting tampering by aggregators or caches.
 
 **Process:**
+
 1. During upload: Hash file content with SHA-256
 2. Store hash in Resource object on Sui
 3. Service worker: Fetch blob from Walrus
@@ -176,21 +184,21 @@ Generate self-contained 2KB HTML file with inline service worker:
 ```html
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>Loading...</title>
-</head>
-<body>
-  <div id="loading">Loading from Walrus...</div>
-  <script>
-    // Inline service worker registration
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js');
-    }
-  </script>
-  <script>
-    // Inline service worker code (embedded as data URI)
-    const swCode = `
+  <head>
+    <meta charset="utf-8" />
+    <title>Loading...</title>
+  </head>
+  <body>
+    <div id="loading">Loading from Walrus...</div>
+    <script>
+      // Inline service worker registration
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+      }
+    </script>
+    <script>
+      // Inline service worker code (embedded as data URI)
+      const swCode = `
       const SITE_ID = '0xabc123...';
       const SUI_RPC = 'https://fullnode.mainnet.sui.io';
       const WALRUS_AGGREGATOR = 'https://aggregator.walrus.space';
@@ -199,9 +207,9 @@ Generate self-contained 2KB HTML file with inline service worker:
       // Fetch blobs from Walrus
       // Validate SHA-256 hashes
       // Cache in browser
-    `;
-  </script>
-</body>
+    `
+    </script>
+  </body>
 </html>
 ```
 
@@ -210,21 +218,23 @@ Generate self-contained 2KB HTML file with inline service worker:
 Automatic failover for 99.9% uptime:
 
 **RPC pool (default):**
+
 ```javascript
 const rpcPool = [
   'https://fullnode.mainnet.sui.io',
   'https://sui-mainnet.nodeinfra.com',
-  'https://sui-mainnet-rpc.allthatnode.com'
-];
+  'https://sui-mainnet-rpc.allthatnode.com',
+]
 ```
 
 **Aggregator pool (default):**
+
 ```javascript
 const aggregatorPool = [
   'https://aggregator.walrus.space',
   'https://wal.app',
-  'https://walrus-testnet-aggregator.nodes.guru'
-];
+  'https://walrus-testnet-aggregator.nodes.guru',
+]
 ```
 
 **Retry logic:** Exponential backoff with automatic pool rotation on failure.
@@ -233,7 +243,7 @@ const aggregatorPool = [
 
 ### Quilt Patches (Byte-Range Fetches)
 
-Support for partial blob fetching via Walrus quilt patches (coming soon).
+**Status:** Not yet implemented. Will support partial blob fetching via Walrus quilt patches.
 
 **Use case:** Large video files, progressive image loading
 
@@ -274,11 +284,13 @@ Resource can redirect to another Site object via Display property.
 **Walrus:** ~0.5 WAL tokens for 365 days (typical 10MB site, 5x encoded)
 
 **Sui transactions:**
+
 - `create_site`: ~0.001 SUI
 - `add_resource` (per resource): ~0.001 SUI
 - `update_resource`: ~0.001 SUI
 
 **Cost optimization:**
+
 - Delta updates: Only upload changed files (99% savings)
 - Content-addressed deduplication
 - Quilt patches for large files
@@ -311,9 +323,10 @@ export default {
 
 ## Implementation Notes
 
-**Language:** TypeScript (Node.js 18+)
+**Language:** JavaScript + JSDoc (Node.js 18+)
 
 **Dependencies:**
+
 - `@mysten/sui.js` - Sui blockchain interaction
 - `commander` - CLI framework
 - `ora` - Loading spinners
@@ -321,23 +334,21 @@ export default {
 - `prompts` - User prompts
 
 **Project structure:**
+
 ```
 src/
 ├── commands/
-│   ├── deploy.ts    # Deploy command
-│   ├── list.ts      # List command
-│   ├── domain.ts    # Domain management
-│   └── dev.ts       # Dev server (future)
+│   ├── deploy.js    # Deploy command
+│   ├── list.js      # List command (placeholder)
+│   └── domain.js    # Domain management (placeholder)
 ├── lib/
-│   ├── walrus.ts    # Walrus upload/download
-│   ├── sui.ts       # Sui transaction builder
-│   ├── hash.ts      # SHA-256 hashing
-│   ├── delta.ts     # Delta detection
-│   ├── sw.ts        # Service worker generation
-│   └── bootstrap.ts # Bootstrap HTML generation
-├── types/
-│   └── index.ts     # Type definitions
-└── index.ts         # CLI entry point
+│   ├── walrus.js    # Walrus upload/download
+│   ├── sui.js       # Sui transaction builder
+│   ├── hash.js      # SHA-256 hashing
+│   ├── delta.js     # Delta detection
+│   ├── sw.js        # Service worker generation
+│   └── bootstrap.js # Bootstrap HTML generation
+└── index.js         # CLI entry point
 ```
 
 ## Future Enhancements (Platform-Only)
@@ -355,6 +366,7 @@ versui deploy ./dist --preview --expires 7d
 ```
 
 **Seal workflow:**
+
 1. Deploy creates `Sealed<PreviewSite>` object
 2. Generate preview token (signed by owner)
 3. Service worker verifies Seal + token before serving
@@ -362,6 +374,7 @@ versui deploy ./dist --preview --expires 7d
 5. Publish unseals → creates public Site
 
 **Use cases:**
+
 - Team review before production
 - Client approval workflows
 - A/B testing different versions
@@ -371,6 +384,7 @@ versui deploy ./dist --preview --expires 7d
 Platform feature for permanent private sites using Seal:
 
 **Use cases:**
+
 - Internal documentation
 - Client-specific portals
 - NFT-gated content
@@ -395,11 +409,13 @@ Platform feature for permanent private sites using Seal:
 ## Success Metrics
 
 **Technical:**
+
 - Deploy in < 2 minutes
 - First load < 3 seconds
 - Cached load < 100ms
 - 99.9% uptime (multi-RPC/aggregator resilience)
 
 **Cost:**
+
 - 99% savings on updates (delta uploads)
 - No bandwidth costs (Walrus handles it)
