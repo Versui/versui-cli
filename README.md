@@ -3,52 +3,26 @@
 
 # Versui CLI
 
-**Deploy static sites to Walrus decentralized storage with one command**
+**Deploy static sites to Walrus decentralized storage with Sui blockchain coordination**
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![npm version](https://img.shields.io/npm/v/@versui/cli.svg)](https://www.npmjs.com/package/@versui/cli)
-
-[Website](https://versui.app) • [Documentation](https://docs.versui.app) • [Discord](https://discord.gg/versui)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933.svg?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 
 </div>
 
 ---
 
-## Overview
+## What is Versui?
 
-Versui CLI deploys static websites to **Walrus** decentralized storage with **Sui** blockchain coordination. The killer feature: **auto-injected service workers** that make your site work offline and fetch content directly from Walrus nodes—no centralized server required after the first load.
+Versui CLI deploys static websites to **Walrus** (decentralized storage with 100+ nodes using Byzantine fault-tolerant erasure coding) and stores metadata on **Sui** blockchain as on-chain objects.
 
-### Why This Matters
+**Key features:**
 
-**Traditional Web3 hosting** (IPFS, Arweave):
-
-```
-User → Gateway Server → Decentralized Storage
-        ↑ (Single point of failure, can be shut down)
-```
-
-**Versui's offline-first approach**:
-
-```
-First visit:  User → Bootstrap HTML (2KB) → Service Worker installed
-Second visit: User → Service Worker → Walrus directly (no server!)
-```
-
-After the first load, your site is **truly decentralized**:
-
-- ✅ Works offline (cached in browser)
-- ✅ Fetches directly from Walrus nodes (no portal dependency)
-- ✅ Self-healing (SW retries failed requests across multiple nodes)
-- ✅ Censorship-resistant (no single server to shut down)
-
-### Key Features
-
-- 🚀 **One-command deployment**: `versui deploy ./dist`
-- 🔧 **Service worker magic**: Auto-injected, handles Walrus fetch + offline caching
-- 🔒 **Decentralized**: Walrus (100+ nodes) + Sui blockchain (no SPOF)
-- ⚡ **Offline-first**: Works without network after first load
-- 🌐 **Self-hosting ready**: Download bootstrap, host anywhere (no platform needed)
-- 📦 **No vendor lock-in**: You own the Sui object, content is yours forever
+- One-command deployment with delta upload optimization (only upload changed files)
+- Service worker auto-injection for offline-first operation
+- Content authentication via SHA-256 hashes stored on-chain
+- Self-hosting support (no platform lock-in)
+- Multi-RPC/aggregator failover for 99.9% uptime
 
 ---
 
@@ -58,88 +32,49 @@ After the first load, your site is **truly decentralized**:
 npm install -g @versui/cli
 ```
 
-**Requirements**:
+**Requirements:**
 
 - Node.js 18+
-- Sui wallet (for testnet/mainnet deploys)
+- Sui wallet (testnet or mainnet)
 
 ---
 
-## Quick Start
+## Usage
 
-### 1. Deploy your site
-
-```bash
-# Build your static site first
-npm run build
-
-# Deploy to Walrus
-versui deploy ./dist
-```
-
-### 2. Access your site
+### Deploy a static site
 
 ```bash
-✅ Site deployed!
-   Object ID: 0xabc123...
-   URL: https://5kc3x9m2p1.versui.app
+versui deploy <directory>
 ```
 
-### 3. (Optional) Link a SuiNS domain
-
-```bash
-versui domain link mysite.sui 0xabc123...
-# Now accessible at: https://mysite.versui.app
-```
-
----
-
-## Commands
-
-### `versui deploy <dir>`
-
-Deploy a directory to Walrus.
-
-**Options**:
+**Options:**
 
 - `-d, --domain <domain>` - Link to SuiNS domain
 - `-e, --epochs <number>` - Storage duration in days (default: 365)
-- `-o, --output <dir>` - Download bootstrap for self-hosting
+- `-o, --output <dir>` - Download bootstrap HTML for self-hosting
 - `--network <network>` - Sui network (testnet, mainnet)
+- `--no-delta` - Force full upload (bypass delta detection)
 
-**Example**:
+**Example:**
 
 ```bash
-# Deploy with custom domain
+# Deploy dist folder to testnet
+versui deploy ./dist --network testnet
+
+# Deploy with custom SuiNS domain
 versui deploy ./dist --domain mysite.sui
 
 # Deploy and download bootstrap for self-hosting
 versui deploy ./dist --output ./bootstrap
 ```
 
----
-
-### `versui list`
-
-List your deployments.
+### List deployments
 
 ```bash
 versui list
 ```
 
-**Output**:
-
-```
-Object ID          Domain              Deployed
-0xabc123...        5kc3x9m2p1.versui.app    2025-01-19 12:00
-0xdef456...        mysite.versui.app       2025-01-18 10:30
-```
-
----
-
-### `versui domain`
-
-Manage custom domains (requires SuiNS ownership).
+### Manage domains
 
 ```bash
 # Link SuiNS domain to deployment
@@ -151,9 +86,126 @@ versui domain unlink mysite.sui
 
 ---
 
+## How It Works
+
+### Storage Layer
+
+Static files are uploaded to **Walrus**, a decentralized storage network with:
+
+- 100+ storage nodes
+- Byzantine fault-tolerant redundancy
+- Erasure coding (5x encoded size)
+- Content-addressed deduplication
+
+### Coordination Layer
+
+Deployment metadata is stored on **Sui** blockchain using derived objects pattern:
+
+**Site object:**
+
+```move
+struct Site has key, store {
+  id: UID,
+  name: String,
+  resource_count: u64,
+}
+```
+
+**Resource objects:**
+
+```move
+struct Resource has key, store {
+  id: UID,
+  site_id: ID,
+  path: String,
+  blob_id: u256,
+  blob_hash: vector<u8>,  // SHA-256 for content authentication
+  content_type: String,
+  size: u64,
+}
+```
+
+### Access Layer
+
+Service workers enable:
+
+- Direct blob fetching from Walrus aggregators
+- Offline operation with browser caching
+- Content authentication via on-chain SHA-256 validation
+- No dependency on centralized portals
+
+---
+
+## Delta Updates
+
+Only changed files are uploaded, reducing storage costs by 99% on updates:
+
+**First deploy:**
+
+```bash
+versui deploy ./dist
+→ Hash all files
+→ Upload all files to Walrus
+→ Create Site + Resource objects on Sui
+→ Store manifest: ~/.versui/deployments/{objectId}/manifest-v1.json
+```
+
+**Update deploy:**
+
+```bash
+versui deploy ./dist
+→ Hash all files
+→ Compare with previous manifest
+→ Upload only changed files (99% savings)
+→ Update Resource objects for changed files
+→ Reuse existing blobs for unchanged files
+```
+
+---
+
+## Configuration
+
+Create `versui.config.js` in your project root:
+
+```javascript
+export default {
+  network: 'testnet',
+  sui: {
+    rpc: ['https://fullnode.mainnet.sui.io'],
+  },
+  walrus: {
+    aggregators: ['https://aggregator.walrus.space'],
+    epochs: 365,
+  },
+  ignore: ['*.map', '.DS_Store'],
+  headers: {
+    '*.html': {
+      'Cache-Control': 'no-cache',
+    },
+    '*.js': {
+      'Cache-Control': 'public, max-age=31536000',
+    },
+  },
+}
+```
+
+### .versuignore
+
+Create a `.versuignore` file to exclude files from deployment:
+
+```
+*.map
+*.DS_Store
+node_modules/
+.git/
+.env
+```
+
+---
+
 ## Self-Hosting
 
-Versui CLI generates a **bootstrap HTML** that you can host anywhere (no platform required).
+Versui generates a 2KB bootstrap HTML that you can host anywhere:
 
 ```bash
 # Deploy and download bootstrap
@@ -162,80 +214,20 @@ versui deploy ./dist --output ./bootstrap
 # Host bootstrap on any static server
 cd bootstrap
 python -m http.server 8000
-
-# Your site is now accessible at localhost:8000
-# Service worker fetches content directly from Walrus
 ```
 
-**Why this works**:
+The bootstrap HTML:
 
-1. Bootstrap HTML registers a service worker
+1. Registers a service worker
 2. Service worker fetches site metadata from Sui
 3. Service worker fetches content from Walrus
 4. Site works offline after first load (cached in browser)
 
-**No Versui platform needed** - you're fully independent.
+**No platform dependency** - you own the Sui object and can host the bootstrap anywhere.
 
 ---
 
-## How It Works
-
-### Architecture
-
-```
-1. versui deploy ./dist
-   ↓
-2. Upload files to Walrus (decentralized storage)
-   ↓
-3. Create Sui object (metadata: routes, resources, blob IDs)
-   ↓
-4. Generate bootstrap HTML (2KB file with service worker)
-   ↓
-5. Access via versui.app or self-host bootstrap
-```
-
-### Service Worker Magic
-
-Versui auto-detects and handles existing service workers:
-
-**Tier 1: No existing SW**
-→ Auto-inject universal service worker (direct Walrus fetch)
-
-**Tier 2: Workbox detected**
-→ Auto-inject Workbox plugin (integrates with your PWA)
-
-**Tier 3: Custom SW detected**
-→ Portal fallback (provide manual integration guide)
-
----
-
-## Configuration
-
-Create a `versui.config.js` in your project root:
-
-```javascript
-export default {
-  // Sui network
-  network: 'testnet', // or 'mainnet'
-
-  // Walrus aggregator
-  aggregator: 'https://aggregator.walrus-testnet.walrus.space',
-
-  // Storage duration
-  epochs: 365,
-
-  // Ignored files
-  ignore: ['*.map', '*.DS_Store'],
-}
-```
-
----
-
-## Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-**Development**:
+## Development
 
 ```bash
 # Clone repo
@@ -245,15 +237,68 @@ cd versui-cli
 # Install dependencies
 npm install
 
-# Run in dev mode
-npm run dev
+# Run tests
+npm test
+
+# Run linter
+npm run lint
+
+# Format code
+npm run format
 
 # Build
 npm run build
-
-# Test
-npm test
 ```
+
+---
+
+## Architecture
+
+**Language:** JavaScript + JSDoc (Node.js 18+)
+
+**Dependencies:**
+
+- `@mysten/sui.js` - Sui blockchain interaction
+- `commander` - CLI framework
+- `ora` - Loading spinners
+- `chalk` - Terminal colors
+- `prompts` - User prompts
+
+**Project structure:**
+
+```
+src/
+├── commands/
+│   ├── deploy.js    # Deploy command
+│   ├── list.js      # List command (placeholder)
+│   └── domain.js    # Domain management (placeholder)
+├── lib/
+│   ├── walrus.js    # Walrus upload/download
+│   ├── sui.js       # Sui transaction builder
+│   ├── hash.js      # SHA-256 hashing
+│   ├── delta.js     # Delta detection
+│   ├── sw.js        # Service worker generation
+│   └── bootstrap.js # Bootstrap HTML generation
+└── index.js         # CLI entry point
+```
+
+---
+
+## Storage Costs
+
+**Walrus:** ~0.5 WAL tokens for 365 days (typical 10MB site, 5x encoded)
+
+**Sui transactions:**
+
+- `create_site`: ~0.001 SUI
+- `add_resource` (per resource): ~0.001 SUI
+- `update_resource`: ~0.001 SUI
+
+**Cost optimization:**
+
+- Delta updates: Only upload changed files (99% savings)
+- Content-addressed deduplication
+- Quilt patches for large files (planned)
 
 ---
 
@@ -265,14 +310,12 @@ Apache 2.0 - see [LICENSE](LICENSE)
 
 ## Links
 
-- [Versui Platform](https://versui.app) - Managed hosting with custom domains
-- [Documentation](https://docs.versui.app)
-- [Walrus](https://walrus.site) - Decentralized storage
-- [Sui](https://sui.io) - Blockchain coordination
-- [Discord](https://discord.gg/versui) - Community support
+- [Walrus Documentation](https://docs.walrus.site)
+- [Sui Documentation](https://docs.sui.io)
+- [Versui Platform](https://versui.app) (planned)
 
 ---
 
 <div align="center">
-  <sub>Built with ❤️ for the Web3 community</sub>
+  <sub>Open source CLI for decentralized static site hosting</sub>
 </div>

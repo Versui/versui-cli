@@ -8,6 +8,8 @@ import {
 } from 'node:fs'
 import { join, extname, relative } from 'node:path'
 
+import { minimatch } from 'minimatch'
+
 import { hash_content } from '../lib/hash.js'
 import { compute_delta } from '../lib/delta.js'
 import { upload_blob } from '../lib/walrus.js'
@@ -51,22 +53,74 @@ function get_content_type(file_path) {
 }
 
 /**
+ * Read .versuignore file and return patterns
+ * @param {string} project_dir - Project directory
+ * @param {Object} fs_module - File system module (injectable)
+ * @returns {string[]} Array of ignore patterns
+ */
+function read_ignore_patterns(
+  project_dir,
+  fs_module = { existsSync, readFileSync },
+) {
+  const ignore_file_path = join(project_dir, '.versuignore')
+
+  if (!fs_module.existsSync(ignore_file_path)) {
+    return []
+  }
+
+  const content = fs_module.readFileSync(ignore_file_path, 'utf-8')
+  return content
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#'))
+}
+
+/**
+ * Check if file should be ignored
+ * @param {string} file_path - File path (relative to base)
+ * @param {string[]} patterns - Ignore patterns
+ * @returns {boolean} True if file should be ignored
+ */
+function should_ignore(file_path, patterns) {
+  for (const pattern of patterns) {
+    if (minimatch(file_path, pattern, { dot: true })) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
  * Recursively scan directory for files
  * @param {string} dir - Directory to scan
  * @param {string} base_dir - Base directory for relative paths
+ * @param {string[]} ignore_patterns - Ignore patterns from .versuignore
  * @param {Object} fs_module - File system module (injectable)
  * @returns {string[]} Array of file paths
  */
-function scan_directory(dir, base_dir, fs_module = { readdirSync, statSync }) {
+function scan_directory(
+  dir,
+  base_dir,
+  ignore_patterns = [],
+  fs_module = { readdirSync, statSync },
+) {
   const files = []
   const entries = fs_module.readdirSync(dir)
 
   for (const entry of entries) {
     const full_path = join(dir, entry)
+    const relative_path = relative(base_dir, full_path)
     const stat = fs_module.statSync(full_path)
 
+    // Check if path should be ignored
+    if (should_ignore(relative_path, ignore_patterns)) {
+      continue
+    }
+
     if (stat.isDirectory()) {
-      files.push(...scan_directory(full_path, base_dir, fs_module))
+      files.push(
+        ...scan_directory(full_path, base_dir, ignore_patterns, fs_module),
+      )
     } else if (stat.isFile()) {
       files.push(full_path)
     }
@@ -112,10 +166,14 @@ export async function deploy(dir, options = {}, context = {}) {
 
   const manifest_path = join(build_dir, '../.versui/manifest.json')
 
-  // Step 1: Scan build directory
-  const file_paths = scan_directory(build_dir, build_dir, fs)
+  // Step 1: Read .versuignore patterns
+  const project_dir = join(build_dir, '..')
+  const ignore_patterns = read_ignore_patterns(project_dir, fs)
 
-  // Step 2: Hash all files
+  // Step 2: Scan build directory
+  const file_paths = scan_directory(build_dir, build_dir, ignore_patterns, fs)
+
+  // Step 3: Hash all files
   /** @type {Record<string, {hash: string, size: number, content_type: string}>} */
   const current_files = {}
   for (const file_path of file_paths) {
