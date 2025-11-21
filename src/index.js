@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
+import chalk from 'chalk'
 
 import { deploy } from './commands/deploy.js'
 import { list } from './commands/list.js'
-import { domain } from './commands/domain.js'
+
+function handle_error(error) {
+  console.error('')
+  console.error(chalk.red('  ✗ Error: ') + error.message)
+  console.error('')
+  process.exit(1)
+}
 
 const program = new Command()
 
@@ -15,32 +22,20 @@ program
 
 program
   .command('deploy')
-  .description('Deploy a directory to Walrus')
+  .description('Deploy site to Walrus + Sui (interactive)')
   .argument('<dir>', 'directory to deploy')
-  .option('-d, --domain <domain>', 'link to SuiNS domain')
-  .option('-e, --epochs <number>', 'storage duration in days', '365')
-  .option('-o, --output <dir>', 'download bootstrap for self-hosting')
-  .option('--network <network>', 'sui network (testnet, mainnet)', 'testnet')
-  .option('--no-delta', 'force full upload (bypass delta detection)')
-  .action(deploy)
+  .option('-e, --epochs <number>', 'storage duration in epochs')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .option('-y, --yes', 'skip confirmations (for CI/scripts)')
+  .option('--json', 'output JSON only (for scripts/services)')
+  .action(async (dir, options) => {
+    try {
+      await deploy(dir, options)
+    } catch (error) {
+      handle_error(error)
+    }
+  })
 
 program.command('list').description('List your deployments').action(list)
-
-program
-  .command('domain')
-  .description('Manage custom domains')
-  .addCommand(
-    new Command('link')
-      .description('Link SuiNS domain to deployment')
-      .argument('<domain>', 'SuiNS domain (e.g., mysite.sui)')
-      .argument('<site-id>', 'Site object ID')
-      .action(domain.link),
-  )
-  .addCommand(
-    new Command('unlink')
-      .description('Unlink SuiNS domain')
-      .argument('<domain>', 'SuiNS domain')
-      .action(domain.unlink),
-  )
 
 program.parse()

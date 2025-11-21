@@ -1,13 +1,9 @@
-/**
- * @typedef {Object} SiteResult
- * @property {string} site_id - Created site object ID
- * @property {string} digest - Transaction digest
- */
+import { Transaction } from '@mysten/sui/transactions'
 
 /**
- * @typedef {Object} ResourceResult
- * @property {string} resource_id - Created/updated resource object ID
- * @property {string} digest - Transaction digest
+ * @typedef {Object} TransactionResult
+ * @property {Uint8Array} tx_bytes - Transaction bytes
+ * @property {string} tx_bytes_base64 - Base64 encoded transaction bytes
  */
 
 /**
@@ -20,119 +16,137 @@
  * @property {Object<string, string>} [headers] - Custom HTTP headers
  */
 
+// Versui package ID on testnet (env var can override for different networks)
+const PACKAGE_ID =
+  process.env.VERSUI_PACKAGE_ID ||
+  '0x467c6f31d1aa8ff0ad6460f60b5733605683bbef47bf148d9b7b37967f4b4b46'
+
 /**
- * Create a new Site object on Sui blockchain
+ * Build a transaction that creates a Site and all Resources
  * @param {string} name - Site name
- * @param {Object} sui_client - Sui client (injectable for testing)
- * @returns {Promise<SiteResult>} Site creation result
+ * @param {ResourceData[]} resources - Array of resources to create
+ * @param {string} sender - Sender address
+ * @param {Object} client - Sui client
+ * @returns {Promise<TransactionResult>} Transaction bytes
  */
-export async function create_site(name, sui_client) {
-  try {
-    // TODO: Build actual transaction block when Move contract is deployed
-    // For now, this is a placeholder that will need:
-    // - Package ID of deployed Move contract
-    // - Module name
-    // - Function name (e.g., "create_site")
+export async function build_deploy_transaction(
+  name,
+  resources,
+  sender,
+  client,
+) {
+  const tx = new Transaction()
 
-    const tx_result = await sui_client.signAndExecuteTransaction({
-      // Transaction block would be built here with:
-      // tx.moveCall({
-      //   target: `${PACKAGE_ID}::versui::create_site`,
-      //   arguments: [tx.pure(name)],
-      // })
+  // Call create_site to get Site object
+  const site = tx.moveCall({
+    target: `${PACKAGE_ID}::site::create_site`,
+    arguments: [tx.pure.string(name)],
+  })
+
+  // Create all resources
+  for (const resource of resources) {
+    tx.moveCall({
+      target: `${PACKAGE_ID}::site::create_resource`,
+      arguments: [
+        site,
+        tx.pure.string(resource.path),
+        tx.pure.u256(BigInt(resource.blob_id)),
+        tx.pure.vector(
+          'u8',
+          Array.from(Buffer.from(resource.blob_hash, 'hex')),
+        ),
+        tx.pure.string(resource.content_type),
+        tx.pure.u64(resource.size),
+      ],
     })
+  }
 
-    // Extract created object ID from transaction effects
-    const created_objects = tx_result.effects?.created || []
-    if (created_objects.length === 0) {
-      throw new Error('No objects created in transaction')
-    }
+  // Transfer Site to sender
+  tx.transferObjects([site], sender)
 
-    const site_id = created_objects[0].reference.objectId
+  // Set sender
+  tx.setSender(sender)
 
-    return {
-      site_id,
-      digest: tx_result.digest,
-    }
-  } catch (error) {
-    throw new Error(`Failed to create site: ${error.message}`)
+  // Build transaction bytes
+  const tx_bytes = await tx.build({ client })
+
+  return {
+    tx_bytes,
+    tx_bytes_base64: Buffer.from(tx_bytes).toString('base64'),
   }
 }
 
 /**
- * Create a new Resource object (derived from Site)
- * @param {string} site_id - Parent site object ID
- * @param {ResourceData} resource_data - Resource metadata
- * @param {Object} sui_client - Sui client (injectable for testing)
- * @returns {Promise<ResourceResult>} Resource creation result
+ * Build a transaction that updates existing Resources
+ * @param {string} site_id - Site object ID
+ * @param {ResourceData[]} resources - Resources to update
+ * @param {string} sender - Sender address
+ * @param {Object} client - Sui client
+ * @returns {Promise<TransactionResult>} Transaction bytes
  */
-export async function create_resource(site_id, resource_data, sui_client) {
-  try {
-    // TODO: Build actual transaction block when Move contract is deployed
-    // tx.moveCall({
-    //   target: `${PACKAGE_ID}::versui::create_resource`,
-    //   arguments: [
-    //     tx.object(site_id),
-    //     tx.pure(resource_data.path),
-    //     tx.pure(resource_data.blob_id),
-    //     tx.pure(Array.from(Buffer.from(resource_data.blob_hash, 'hex'))),
-    //     tx.pure(resource_data.content_type),
-    //     tx.pure(resource_data.size),
-    //   ],
-    // })
+export async function build_update_transaction(
+  site_id,
+  resources,
+  sender,
+  client,
+) {
+  const tx = new Transaction()
 
-    const tx_result = await sui_client.signAndExecuteTransaction({})
+  // Update all resources
+  for (const resource of resources) {
+    tx.moveCall({
+      target: `${PACKAGE_ID}::site::update_resource`,
+      arguments: [
+        tx.object(resource.resource_id),
+        tx.pure.u256(BigInt(resource.blob_id)),
+        tx.pure.vector(
+          'u8',
+          Array.from(Buffer.from(resource.blob_hash, 'hex')),
+        ),
+        tx.pure.u64(resource.size),
+      ],
+    })
+  }
 
-    const created_objects = tx_result.effects?.created || []
-    if (created_objects.length === 0) {
-      throw new Error('No objects created in transaction')
-    }
+  // Set sender
+  tx.setSender(sender)
 
-    const resource_id = created_objects[0].reference.objectId
+  // Build transaction bytes
+  const tx_bytes = await tx.build({ client })
 
-    return {
-      resource_id,
-      digest: tx_result.digest,
-    }
-  } catch (error) {
-    throw new Error(`Failed to create resource: ${error.message}`)
+  return {
+    tx_bytes,
+    tx_bytes_base64: Buffer.from(tx_bytes).toString('base64'),
   }
 }
 
 /**
- * Update an existing Resource object
- * @param {string} resource_id - Resource object ID to update
- * @param {Partial<ResourceData>} resource_data - Updated resource metadata
- * @param {Object} sui_client - Sui client (injectable for testing)
- * @returns {Promise<ResourceResult>} Resource update result
+ * Parse signature from sui keytool output
+ * @param {string} output - Output from sui keytool sign
+ * @returns {string} Signature
  */
-export async function update_resource(resource_id, resource_data, sui_client) {
-  try {
-    // TODO: Build actual transaction block when Move contract is deployed
-    // tx.moveCall({
-    //   target: `${PACKAGE_ID}::versui::update_resource`,
-    //   arguments: [
-    //     tx.object(resource_id),
-    //     tx.pure(resource_data.blob_id),
-    //     tx.pure(Array.from(Buffer.from(resource_data.blob_hash, 'hex'))),
-    //     tx.pure(resource_data.size),
-    //   ],
-    // })
-
-    const tx_result = await sui_client.signAndExecuteTransaction({})
-
-    // Extract mutated object ID from transaction effects
-    const mutated_objects = tx_result.effects?.mutated || []
-    const updated_resource_id =
-      mutated_objects.length > 0
-        ? mutated_objects[0].reference.objectId
-        : resource_id
-
-    return {
-      resource_id: updated_resource_id,
-      digest: tx_result.digest,
-    }
-  } catch (error) {
-    throw new Error(`Failed to update resource: ${error.message}`)
+export function extract_signature(output) {
+  const match = output.match(/Serialized signature[^:]*:\s*([A-Za-z0-9+/=]+)/)
+  if (!match) {
+    throw new Error('Could not extract signature from sui keytool output')
   }
+  return match[1]
+}
+
+/**
+ * Parse object IDs from transaction execution output
+ * @param {string} output - Output from sui client execute-signed-tx
+ * @returns {string[]} Created object IDs
+ */
+export function extract_created_objects(output) {
+  const object_ids = []
+  // Match "ID: 0x..." pattern (works with both table format and simple format)
+  const regex = /ID:\s*(0x[a-f0-9]+)/gi
+  let match
+
+  while ((match = regex.exec(output)) !== null) {
+    object_ids.push(match[1])
+  }
+
+  return object_ids
 }

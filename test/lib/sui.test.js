@@ -2,150 +2,108 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  create_site,
-  create_resource,
-  update_resource,
+  extract_signature,
+  extract_created_objects,
 } from '../../src/lib/sui.js'
 
-describe('create_site', () => {
-  it('should create site object', async () => {
-    const mock_client = {
-      signAndExecuteTransaction: async tx => ({
-        digest: '0xabc123',
-        effects: {
-          created: [
-            {
-              reference: { objectId: '0xsite123' },
-            },
-          ],
-        },
-      }),
-    }
+// Note: Transaction building tests (build_deploy_transaction, build_update_transaction)
+// are tested in integration tests instead, as they require complex SuiClient mocking
+// with methods like getReferenceGasPrice(), getCoins(), etc.
 
-    const result = await create_site('my-site', mock_client)
+describe('extract_signature', () => {
+  it('should extract signature from sui keytool output', () => {
+    const output = `
+Signature: 0xabc123
+Serialized signature: AQNyMjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3==
+Public key: 0xdef456
+    `
 
-    assert.equal(result.site_id, '0xsite123')
-    assert.equal(result.digest, '0xabc123')
-  })
-
-  it('should throw on transaction failure', async () => {
-    const mock_client = {
-      signAndExecuteTransaction: async tx => {
-        throw new Error('Transaction failed')
-      },
-    }
-
-    await assert.rejects(
-      async () => await create_site('my-site', mock_client),
-      { message: /Failed to create site/ },
+    const signature = extract_signature(output)
+    assert.equal(
+      signature,
+      'AQNyMjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3MjQ3==',
     )
   })
-})
 
-describe('create_resource', () => {
-  it('should create resource object', async () => {
-    const mock_client = {
-      signAndExecuteTransaction: async tx => ({
-        digest: '0xdef456',
-        effects: {
-          created: [
-            {
-              reference: { objectId: '0xresource123' },
-            },
-          ],
-        },
-      }),
-    }
+  it('should handle different output formats', () => {
+    const output = `
+Some random text
+Serialized signature (Base64): AbCdEfGhIjKlMnOpQrStUvWxYz==
+More text
+    `
 
-    const resource_data = {
-      path: '/index.html',
-      blob_id: 'blob_xyz',
-      blob_hash: 'abc123',
-      content_type: 'text/html',
-      size: 1024,
-    }
-
-    const result = await create_resource(
-      '0xsite123',
-      resource_data,
-      mock_client,
-    )
-
-    assert.equal(result.resource_id, '0xresource123')
-    assert.equal(result.digest, '0xdef456')
+    const signature = extract_signature(output)
+    assert.equal(signature, 'AbCdEfGhIjKlMnOpQrStUvWxYz==')
   })
 
-  it('should throw on transaction failure', async () => {
-    const mock_client = {
-      signAndExecuteTransaction: async tx => {
-        throw new Error('Transaction failed')
-      },
-    }
+  it('should throw on missing signature', () => {
+    const output = 'No signature here'
 
-    const resource_data = {
-      path: '/index.html',
-      blob_id: 'blob_xyz',
-      blob_hash: 'abc123',
-      content_type: 'text/html',
-      size: 1024,
-    }
-
-    await assert.rejects(
-      async () =>
-        await create_resource('0xsite123', resource_data, mock_client),
-      { message: /Failed to create resource/ },
-    )
+    assert.throws(() => extract_signature(output), {
+      message: /Could not extract signature/,
+    })
   })
 })
 
-describe('update_resource', () => {
-  it('should update resource object', async () => {
-    const mock_client = {
-      signAndExecuteTransaction: async tx => ({
-        digest: '0xghi789',
-        effects: {
-          mutated: [
-            {
-              reference: { objectId: '0xresource123' },
-            },
-          ],
-        },
-      }),
-    }
+describe('extract_created_objects', () => {
+  it('should extract object IDs from execution output (table format)', () => {
+    const output = `
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Created Objects                                                                                          │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──                                                                                                     │
+│  │ ID: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef                               │
+│  │ Type: 0x2::versui::Site                                                                              │
+│  └──                                                                                                     │
+│  ┌──                                                                                                     │
+│  │ ID: 0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890                               │
+│  │ Type: 0x2::versui::Resource                                                                          │
+│  └──                                                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+    `
 
-    const resource_data = {
-      blob_id: 'blob_new',
-      blob_hash: 'def456',
-      size: 2048,
-    }
-
-    const result = await update_resource(
-      '0xresource123',
-      resource_data,
-      mock_client,
+    const object_ids = extract_created_objects(output)
+    assert.equal(object_ids.length, 2)
+    assert.equal(
+      object_ids[0],
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     )
-
-    assert.equal(result.resource_id, '0xresource123')
-    assert.equal(result.digest, '0xghi789')
+    assert.equal(
+      object_ids[1],
+      '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    )
   })
 
-  it('should throw on transaction failure', async () => {
-    const mock_client = {
-      signAndExecuteTransaction: async tx => {
-        throw new Error('Transaction failed')
-      },
-    }
+  it('should extract object IDs from execution output (simple format)', () => {
+    const output = `
+Created Objects:
+  ID: 0x123abc
+  Type: 0x2::versui::Site
+  ID: 0x456def
+  Type: 0x2::versui::Resource
+    `
 
-    const resource_data = {
-      blob_id: 'blob_new',
-      blob_hash: 'def456',
-      size: 2048,
-    }
+    const object_ids = extract_created_objects(output)
+    assert.equal(object_ids.length, 2)
+    assert.equal(object_ids[0], '0x123abc')
+    assert.equal(object_ids[1], '0x456def')
+  })
 
-    await assert.rejects(
-      async () =>
-        await update_resource('0xresource123', resource_data, mock_client),
-      { message: /Failed to update resource/ },
-    )
+  it('should return empty array when no objects created', () => {
+    const output = 'No created objects section'
+
+    const object_ids = extract_created_objects(output)
+    assert.equal(object_ids.length, 0)
+  })
+
+  it('should handle single object', () => {
+    const output = `
+Created Objects:
+  ID: 0x123abc
+    `
+
+    const object_ids = extract_created_objects(output)
+    assert.equal(object_ids.length, 1)
+    assert.equal(object_ids[0], '0x123abc')
   })
 })

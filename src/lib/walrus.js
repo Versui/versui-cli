@@ -1,82 +1,86 @@
-/**
- * @typedef {Object} UploadResult
- * @property {string} blob_id - Walrus blob ID
- * @property {string} [object_id] - Sui object ID
- * @property {number} size - Blob size
- * @property {boolean} [already_exists] - True if blob already existed
- */
+import { WalrusClient } from '@mysten/walrus'
 
 /**
- * Upload blob to Walrus storage
- * @param {Buffer} content - File content as Buffer
- * @param {string} publisher_url - Walrus publisher URL
- * @param {number} epochs - Storage duration in epochs (1 epoch = ~24 hours)
- * @param {Function} [fetch_fn=fetch] - Fetch function (injectable for testing)
- * @returns {Promise<UploadResult>} Upload result with blob ID and metadata
+ * Create Walrus client for network
+ * @param {string} network - 'testnet' or 'mainnet'
+ * @param {import('@mysten/sui/client').SuiClient} sui_client - Sui client
+ * @returns {WalrusClient}
  */
-export async function upload_blob(
-  content,
-  publisher_url,
-  epochs,
-  fetch_fn = fetch,
-) {
-  const url = `${publisher_url}/v1/blobs?epochs=${epochs}`
-
-  const response = await fetch_fn(url, {
-    method: 'PUT',
-    body: content,
-    headers: {
-      'Content-Type': 'application/octet-stream',
-    },
+export function create_walrus_client(network, sui_client) {
+  return new WalrusClient({
+    network: network === 'mainnet' ? 'mainnet' : 'testnet',
+    suiClient: sui_client,
   })
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to upload blob: ${response.status} ${response.statusText}`,
-    )
-  }
-
-  const data = await response.json()
-
-  // Check if blob was newly created
-  if (data.newlyCreated) {
-    return {
-      blob_id: data.newlyCreated.blobObject.blobId,
-      object_id: data.newlyCreated.blobObject.id,
-      size: data.newlyCreated.blobObject.size,
-    }
-  }
-
-  // Check if blob already exists
-  if (data.alreadyCertified) {
-    return {
-      blob_id: data.alreadyCertified.blobId,
-      size: 0, // Size not provided for already certified blobs
-      already_exists: true,
-    }
-  }
-
-  throw new Error('Unexpected response format from Walrus publisher')
 }
 
 /**
- * Download blob from Walrus aggregator
- * @param {string} blob_id - Blob ID to download
- * @param {string} aggregator_url - Walrus aggregator URL
- * @param {Function} [fetch_fn=fetch] - Fetch function (injectable for testing)
- * @returns {Promise<Buffer>} Blob content as Buffer
+ * Encode files and return metadata for registration
+ * @param {WalrusClient} walrus_client
+ * @param {Array<{path: string, content: Buffer}>} files
+ * @returns {Promise<Array<{path: string, blob_id: string, root_hash: number[], size: number, metadata: Object}>>}
  */
-export async function download_blob(blob_id, aggregator_url, fetch_fn = fetch) {
-  const url = `${aggregator_url}/v1/blobs/${blob_id}`
+export async function encode_files(walrus_client, files) {
+  const encoded_blobs = []
 
-  const response = await fetch_fn(url)
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to download blob: ${response.status} ${response.statusText}`,
-    )
+  for (const file of files) {
+    const encoded = await walrus_client.encodeBlob(file.content)
+    encoded_blobs.push({
+      path: file.path,
+      blob_id: encoded.blobId,
+      root_hash: Array.from(encoded.rootHash),
+      size: file.content.length,
+      metadata: encoded.metadata,
+    })
   }
 
-  const array_buffer = await response.arrayBuffer()
-  return Buffer.from(array_buffer)
+  return encoded_blobs
+}
+
+/**
+ * Upload files to storage nodes and get confirmations
+ * This re-encodes the files (deterministic) and uploads
+ * @param {WalrusClient} walrus_client
+ * @param {Array<{content: Buffer}>} files - File contents
+ * @param {Array<string>} blob_object_ids - Blob object IDs from register TX
+ * @param {Object} options
+ * @returns {Promise<Array>} confirmations by blob
+ */
+export async function upload_files_to_nodes(
+  walrus_client,
+  files,
+  blob_object_ids,
+  options = {},
+) {
+  const { deletable = true } = options
+  const confirmations_by_blob = []
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+
+    // Re-encode (deterministic - same content = same slivers)
+    const encoded = await walrus_client.encodeBlob(file.content)
+
+    // Upload to nodes
+    const confirmations = await walrus_client.writeEncodedBlobToNodes({
+      blobId: encoded.blobId,
+      metadata: encoded.metadata,
+      sliversByNode: encoded.sliversByNode,
+      deletable,
+      objectId: blob_object_ids[i],
+    })
+
+    confirmations_by_blob.push(confirmations.filter(c => c !== null))
+  }
+
+  return confirmations_by_blob
+}
+
+/**
+ * Download blob from Walrus
+ * @param {WalrusClient} walrus_client
+ * @param {string} blob_id
+ * @returns {Promise<Uint8Array>}
+ */
+export async function download_blob(walrus_client, blob_id) {
+  return walrus_client.readBlob({ blobId: blob_id })
 }
