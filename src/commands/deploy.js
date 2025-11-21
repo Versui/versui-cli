@@ -14,6 +14,7 @@ import logUpdate from 'log-update'
 import { hash_content } from '../lib/hash.js'
 import { scan_directory, get_content_type, read_file } from '../lib/files.js'
 import { MIME_TYPES_BROWSER } from '../lib/mime-browser.js'
+import { read_versui_config, get_aggregators } from '../lib/config.js'
 
 const WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space'
 const VERSUI_PACKAGE_ID =
@@ -274,6 +275,10 @@ export async function deploy(dir, options = {}) {
     throw new Error(`Invalid directory: ${dir}`)
   }
 
+  // Read .versui config from project root (parent of dist dir)
+  const project_dir = join(dir, '..')
+  const versui_config = read_versui_config(project_dir)
+
   // Show header once
   console.log('')
   console.log(render_header())
@@ -531,10 +536,7 @@ export async function deploy(dir, options = {}) {
     resource_map[full_path] = patch.quiltPatchId
   }
 
-  const aggregators =
-    network === 'mainnet'
-      ? ['https://aggregator.walrus.space', 'https://wal-aggregator.stakin.io']
-      : [WALRUS_AGGREGATOR, 'https://aggregator.testnet.blob.store']
+  const aggregators = get_aggregators(versui_config, network)
   const { html, sw } = generate_bootstrap(
     'Versui Site',
     aggregators,

@@ -122,6 +122,22 @@ The SW intercepts requests and fetches from Walrus aggregators:
 
 ---
 
+## Configuration
+
+Create a `.versui` file at your project root to customize behavior:
+
+```json
+{
+  "aggregators": [
+    "https://my-custom-aggregator.example.com"
+  ]
+}
+```
+
+Custom aggregators are prepended to defaults for priority-based failover.
+
+---
+
 ## Custom Service Worker
 
 If you have your own SW, use the `@versui/sw-plugin` package:
@@ -134,15 +150,26 @@ npm install @versui/sw-plugin
 // sw.js
 import { create_versui_handler } from '@versui/sw-plugin'
 
+// Create handler (resources loaded separately)
 const versui = create_versui_handler({
-  resources: {
-    '/index.html': 'quilt-patch-id',
-    '/assets/main.js': 'another-patch-id',
-  },
   cache_name: 'my-app-v1', // Optional caching
+  aggregators: ['https://custom.io'], // Optional additional aggregators
+})
+
+// Load resources (can be called anytime)
+versui.load({
+  '/index.html': 'quilt-patch-id',
+  '/assets/main.js': 'another-patch-id',
 })
 
 self.addEventListener('fetch', e => versui.handle(e))
+
+// Dynamic updates
+self.addEventListener('message', e => {
+  if (e.data.type === 'UPDATE_VERSUI') {
+    versui.load(e.data.resources)
+  }
+})
 ```
 
 ---
