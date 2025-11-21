@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
+
 import { deploy } from './commands/deploy.js'
 import { list } from './commands/list.js'
 import { domain } from './commands/domain.js'
@@ -23,10 +24,7 @@ program
   .option('--no-delta', 'force full upload (bypass delta detection)')
   .action(deploy)
 
-program
-  .command('list')
-  .description('List your deployments')
-  .action(list)
+program.command('list').description('List your deployments').action(list)
 
 program
   .command('domain')
@@ -36,13 +34,13 @@ program
       .description('Link SuiNS domain to deployment')
       .argument('<domain>', 'SuiNS domain (e.g., mysite.sui)')
       .argument('<site-id>', 'Site object ID')
-      .action(domain.link)
+      .action(domain.link),
   )
   .addCommand(
     new Command('unlink')
       .description('Unlink SuiNS domain')
       .argument('<domain>', 'SuiNS domain')
-      .action(domain.unlink)
+      .action(domain.unlink),
   )
 
 program.parse()

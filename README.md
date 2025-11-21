@@ -1,14 +1,15 @@
 <div align="center">
   <img src="logo.png" alt="Versui Logo" width="200"/>
 
-  # Versui CLI
+# Versui CLI
 
-  **Deploy static sites to Walrus decentralized storage with one command**
+**Deploy static sites to Walrus decentralized storage with one command**
 
-  [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-  [![npm version](https://img.shields.io/npm/v/@versui/cli.svg)](https://www.npmjs.com/package/@versui/cli)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/@versui/cli.svg)](https://www.npmjs.com/package/@versui/cli)
 
-  [Website](https://versui.app) • [Documentation](https://docs.versui.app) • [Discord](https://discord.gg/versui)
+[Website](https://versui.app) • [Documentation](https://docs.versui.app) • [Discord](https://discord.gg/versui)
+
 </div>
 
 ---
@@ -20,18 +21,21 @@ Versui CLI deploys static websites to **Walrus** decentralized storage with **Su
 ### Why This Matters
 
 **Traditional Web3 hosting** (IPFS, Arweave):
+
 ```
 User → Gateway Server → Decentralized Storage
         ↑ (Single point of failure, can be shut down)
 ```
 
 **Versui's offline-first approach**:
+
 ```
 First visit:  User → Bootstrap HTML (2KB) → Service Worker installed
 Second visit: User → Service Worker → Walrus directly (no server!)
 ```
 
 After the first load, your site is **truly decentralized**:
+
 - ✅ Works offline (cached in browser)
 - ✅ Fetches directly from Walrus nodes (no portal dependency)
 - ✅ Self-healing (SW retries failed requests across multiple nodes)
@@ -55,6 +59,7 @@ npm install -g @versui/cli
 ```
 
 **Requirements**:
+
 - Node.js 18+
 - Sui wallet (for testnet/mainnet deploys)
 
@@ -96,12 +101,14 @@ versui domain link mysite.sui 0xabc123...
 Deploy a directory to Walrus.
 
 **Options**:
+
 - `-d, --domain <domain>` - Link to SuiNS domain
 - `-e, --epochs <number>` - Storage duration in days (default: 365)
 - `-o, --output <dir>` - Download bootstrap for self-hosting
 - `--network <network>` - Sui network (testnet, mainnet)
 
 **Example**:
+
 ```bash
 # Deploy with custom domain
 versui deploy ./dist --domain mysite.sui
@@ -121,6 +128,7 @@ versui list
 ```
 
 **Output**:
+
 ```
 Object ID          Domain              Deployed
 0xabc123...        5kc3x9m2p1.versui.app    2025-01-19 12:00
@@ -160,6 +168,7 @@ python -m http.server 8000
 ```
 
 **Why this works**:
+
 1. Bootstrap HTML registers a service worker
 2. Service worker fetches site metadata from Sui
 3. Service worker fetches content from Walrus
@@ -216,10 +225,7 @@ export default {
   epochs: 365,
 
   // Ignored files
-  ignore: [
-    '*.map',
-    '*.DS_Store'
-  ]
+  ignore: ['*.map', '*.DS_Store'],
 }
 ```
 

@@ -4,18 +4,27 @@
   "description": "Deploy static sites to Walrus decentralized storage",
   "type": "module",
   "bin": {
-    "versui": "./dist/index.js"
+    "versui": "./src/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/index.ts",
-    "prepublishOnly": "npm run build"
+    "dev": "node src/index.js",
+    "lint": "eslint . && prettier . --check && npm run typecheck",
+    "typecheck": "tsc --build",
+    "format": "prettier . --write && eslint . --fix",
+    "test": "NODE_NO_WARNINGS=1 node --test test/**/*.test.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Versui/versui-cli.git"
   },
-  "keywords": ["walrus", "sui", "blockchain", "web3", "deployment", "cli"],
+  "keywords": [
+    "walrus",
+    "sui",
+    "blockchain",
+    "web3",
+    "deployment",
+    "cli"
+  ],
   "author": "",
   "license": "Apache-2.0",
   "bugs": {
@@ -32,7 +41,15 @@
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/prompts": "^2.4.9",
-    "tsx": "^4.19.2",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-n": "^17.23.1",
+    "eslint-plugin-promise": "^7.2.1",
+    "prettier": "^3.6.2",
     "typescript": "^5.7.3"
   }
 }
