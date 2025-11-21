@@ -147,22 +147,6 @@ self.addEventListener('fetch', e => versui.handle(e))
 
 ---
 
-## Storage Costs
-
-**Walrus storage:** ~0.1-0.5 WAL per 10MB for 1 epoch
-**Sui transaction:** ~0.01 SUI
-
----
-
-## Error Handling
-
-- **Missing walrus CLI** - Shows install instructions
-- **Missing sui CLI** - Shows install instructions
-- **Expired storage** - Bootstrap shows "Awaiting Renewal" with auto-retry
-- **No SW support** - Shows browser compatibility message
-
----
-
 ## Development
 
 ```bash
