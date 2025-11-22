@@ -5,6 +5,7 @@ import chalk from 'chalk'
 
 import { deploy } from './commands/deploy.js'
 import { list } from './commands/list.js'
+import { delete_site } from './commands/delete.js'
 
 function handle_error(error) {
   console.error('')
@@ -36,6 +37,18 @@ program
     }
   })
 
-program.command('list').description('List your deployments').action(list)
+program
+  .command('list')
+  .description('List your deployments')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .action(list)
+
+program
+  .command('delete')
+  .description('Delete a site deployment')
+  .argument('<site-id>', 'site object ID to delete')
+  .option('-y, --yes', 'skip confirmation prompt')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .action(delete_site)
 
 program.parse()
