@@ -37,6 +37,9 @@ const VERSUI_PACKAGE_IDS = {
 }
 const versui_gradient = gradient(['#00d4ff', '#00ffd1', '#7c3aed'])
 
+// Spinner frames for animated loading indicator
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
 // State for tracking progress
 const state = {
   dir: null,
@@ -52,6 +55,7 @@ const state = {
   step: 'init', // init, config, scan, walrus, sui, done
   spinner_text: null,
   upload_progress: 0,
+  spinner_frame: 0,
 }
 
 // format_bytes moved to ./deploy/formatting.js and imported above
@@ -143,7 +147,9 @@ function render_state(include_header = false) {
   // Current action spinner
   if (state.spinner_text) {
     lines.push('')
-    lines.push(`  ${chalk.cyan('⠋')} ${state.spinner_text}`)
+    const spinner_char =
+      SPINNER_FRAMES[state.spinner_frame % SPINNER_FRAMES.length]
+    lines.push(`  ${chalk.cyan(spinner_char)} ${state.spinner_text}`)
 
     // Show progress bar if uploading
     if (state.upload_progress > 0) {
@@ -162,6 +168,7 @@ function render_state(include_header = false) {
 }
 
 function update_display() {
+  state.spinner_frame++
   logUpdate(render_state())
 }
 
@@ -420,6 +427,13 @@ export async function deploy(dir, options = {}) {
   state.upload_progress = 0
   update_display()
 
+  // Start spinner animation (update every 80ms for smooth animation)
+  const spinner_interval = setInterval(() => {
+    if (state.spinner_text) {
+      update_display()
+    }
+  }, 80)
+
   const quilt_result = await upload_to_walrus_with_progress(
     dir,
     epochs,
@@ -431,6 +445,9 @@ export async function deploy(dir, options = {}) {
       update_display()
     },
   )
+
+  // Stop spinner animation
+  clearInterval(spinner_interval)
 
   const blob_store = quilt_result.blobStoreResult
   state.blob_id =
