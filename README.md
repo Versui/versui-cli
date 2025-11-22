@@ -139,44 +139,17 @@ Custom aggregators are prepended to defaults for priority-based failover.
 
 ## Custom Service Worker
 
-If you have your own SW, use the `@versui/sw-plugin` package:
-
-```bash
-npm install @versui/sw-plugin
-```
+Already have a service worker? Add Versui in 3 lines:
 
 ```js
-// sw.js
 import { create_versui_handler } from '@versui/sw-plugin'
 
-// Create handler (resources loaded separately)
-const versui = create_versui_handler({
-  cache_name: 'my-app-v1', // Optional caching
-  aggregators: ['https://custom.io'], // Optional additional aggregators
-})
-
-// Load resources (can be called anytime)
-versui.load({
-  '/index.html': 'quilt-patch-id',
-  '/assets/main.js': 'another-patch-id',
-})
-
+const versui = create_versui_handler()
+versui.load({ '/index.html': 'blob-id' }) // From deploy output
 self.addEventListener('fetch', e => versui.handle(e))
-
-// Dynamic updates
-self.addEventListener('message', e => {
-  if (e.data.type === 'UPDATE_VERSUI') {
-    versui.load(e.data.resources)
-  }
-})
 ```
 
----
-
-## Storage Costs
-
-**Walrus storage:** ~0.1-0.5 WAL per 10MB for 1 epoch
-**Sui transaction:** ~0.01 SUI
+[Full API docs →](https://github.com/Versui/versui-sw-plugin#readme)
 
 ---
 
