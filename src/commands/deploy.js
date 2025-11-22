@@ -17,6 +17,19 @@ import { MIME_TYPES_BROWSER } from '../lib/mime-browser.js'
 import { read_versui_config, get_aggregators } from '../lib/config.js'
 import { detect_service_worker, generate_sw_snippet } from '../lib/sw.js'
 
+import {
+  validate_directory,
+  check_prerequisites,
+  get_prerequisite_error,
+} from './deploy/validate.js'
+import { build_files_metadata } from './deploy/file-metadata.js'
+import { format_bytes, format_wallet_address } from './deploy/formatting.js'
+import {
+  build_identifier_map,
+  create_site_transaction,
+  extract_site_id,
+} from './deploy/transaction.js'
+
 const VERSUI_PACKAGE_IDS = {
   testnet: '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b',
   mainnet: null, // TODO: Add mainnet package ID when deployed
@@ -39,11 +52,7 @@ const state = {
   spinner_text: null,
 }
 
-function format_bytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
-}
+// format_bytes moved to ./deploy/formatting.js and imported above
 
 function render_header() {
   const logo = figlet.textSync('VERSUI', {
@@ -82,7 +91,7 @@ function render_state(include_header = false) {
       )
     if (state.wallet)
       config_items.push(
-        `${chalk.dim('Wallet:')} ${chalk.dim(state.wallet.slice(0, 10) + '...' + state.wallet.slice(-4))}`,
+        `${chalk.dim('Wallet:')} ${chalk.dim(format_wallet_address(state.wallet))}`,
       )
     lines.push('  ' + config_items.join('  │  '))
     lines.push('')
@@ -286,7 +295,7 @@ export async function deploy(dir, options = {}) {
   }
 
   // Validate directory
-  if (!dir || !existsSync(dir) || !statSync(dir).isDirectory()) {
+  if (!validate_directory(dir)) {
     throw new Error(`Invalid directory: ${dir}`)
   }
 
@@ -336,14 +345,15 @@ export async function deploy(dir, options = {}) {
       epochs = 1
     } else {
       const epoch_days = network === 'mainnet' ? 14 : 1
+      const max_epochs = network === 'mainnet' ? 53 : 200
       const r = await prompts(
         {
           type: 'number',
           name: 'epochs',
-          message: `Storage duration in epochs (1 epoch ≈ ${epoch_days} days)`,
+          message: `Storage duration in epochs (1 epoch ≈ ${epoch_days} days, max: ${max_epochs})`,
           initial: 1,
           min: 1,
-          max: 200,
+          max: max_epochs,
         },
         { onCancel: on_cancel },
       )
@@ -354,17 +364,10 @@ export async function deploy(dir, options = {}) {
   state.epochs = epochs
 
   // Check prerequisites
-  try {
-    execSync('which walrus', { stdio: 'pipe' })
-  } catch {
-    throw new Error(
-      'Walrus CLI not found. Install from: https://docs.walrus.site',
-    )
-  }
-  try {
-    execSync('which sui', { stdio: 'pipe' })
-  } catch {
-    throw new Error('Sui CLI not found. Install from: https://docs.sui.io')
+  const prereqs = check_prerequisites()
+  if (!prereqs.success) {
+    const [first_missing] = prereqs.missing
+    throw new Error(get_prerequisite_error(first_missing))
   }
 
   state.wallet = get_sui_active_address()
@@ -383,21 +386,13 @@ export async function deploy(dir, options = {}) {
   update_display()
 
   const file_paths = scan_directory(dir, dir)
-  const file_metadata = {}
-
-  for (const file_path of file_paths) {
-    const rel_path = '/' + relative(dir, file_path).replace(/\\/g, '/')
-    const content = read_file(file_path)
-    const { size } = statSync(file_path)
-    state.total_size += size
-    file_metadata[rel_path] = {
-      hash: hash_content(content),
-      size,
-      content_type: get_content_type(file_path),
-    }
-  }
+  const { metadata: file_metadata, total_size } = build_files_metadata(
+    file_paths,
+    dir,
+  )
 
   state.files_count = file_paths.length
+  state.total_size = total_size
   state.spinner_text = null
   update_display()
 
@@ -458,45 +453,13 @@ export async function deploy(dir, options = {}) {
     throw new Error(`Versui package not deployed on ${network} yet`)
   }
 
-  const tx = new Transaction()
-  tx.setSender(state.wallet)
-
-  // Use non-entry functions (new + add_resource) instead of entry functions
-  // This allows us to keep the Site object in the transaction for multiple calls
-  const [site] = tx.moveCall({
-    target: `${package_id}::site::new`,
-    arguments: [tx.pure.string('Versui Site')],
+  const tx = create_site_transaction({
+    package_id,
+    wallet: state.wallet,
+    site_name: 'Versui Site',
+    quilt_patches,
+    file_metadata,
   })
-
-  // Build identifier -> full path mapping (walrus flattens paths)
-  const identifier_to_path = {}
-  for (const rel_path of Object.keys(file_metadata)) {
-    const filename = rel_path.split('/').pop()
-    identifier_to_path[filename] = rel_path
-  }
-
-  const resources = []
-  for (const patch of quilt_patches) {
-    const full_path =
-      identifier_to_path[patch.identifier] || '/' + patch.identifier
-    const info = file_metadata[full_path]
-    if (!info) continue
-    const [resource] = tx.moveCall({
-      target: `${package_id}::site::add_resource`,
-      arguments: [
-        site,
-        tx.pure.string(full_path),
-        tx.pure.string(patch.quiltPatchId),
-        tx.pure.vector('u8', Array.from(fromBase64(info.hash))),
-        tx.pure.string(info.content_type),
-        tx.pure.u64(info.size),
-      ],
-    })
-    resources.push(resource)
-  }
-
-  // Transfer Site + all Resources to wallet
-  tx.transferObjects([site, ...resources], state.wallet)
 
   const tx_bytes = await tx.build({ client: sui_client })
   const tx_base64 = toBase64(tx_bytes)
@@ -543,10 +506,7 @@ export async function deploy(dir, options = {}) {
     throw new Error(`Transaction failed: ${err.stderr || err.message}`)
   }
 
-  state.site_id =
-    tx_result?.objectChanges?.find(
-      c => c.type === 'created' && c.objectType?.includes('::site::Site'),
-    )?.objectId || 'unknown'
+  state.site_id = extract_site_id(tx_result)
 
   // Detect service worker in build (skip if --custom-sw flag)
   let sw_detection
@@ -588,6 +548,7 @@ export async function deploy(dir, options = {}) {
     const index_patch = quilt_patches.find(p => p.identifier === 'index.html')
     if (!index_patch) throw new Error('No index.html found')
 
+    const identifier_to_path = build_identifier_map(file_metadata)
     const resource_map = {}
     for (const patch of quilt_patches) {
       const full_path =
@@ -638,6 +599,7 @@ export async function deploy(dir, options = {}) {
     )
   } else {
     // Build resource map for snippet
+    const identifier_to_path = build_identifier_map(file_metadata)
     /** @type {Object<string, string>} */
     const resource_map = {}
     for (const patch of quilt_patches) {
@@ -896,9 +858,8 @@ async function upload_to_walrus_with_progress(
   })
 }
 
-// Export testable functions
+// Export testable functions (format_bytes moved to ./deploy/formatting.js)
 export {
-  format_bytes,
   get_sui_active_address,
   get_walrus_price_estimate,
   upload_to_walrus_with_progress,
