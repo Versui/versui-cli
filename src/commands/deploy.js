@@ -491,7 +491,8 @@ export async function deploy(dir, options = {}) {
     })
   }
 
-  tx.transferObjects([site], state.wallet)
+  // Note: create_site and create_resource are entry functions that auto-transfer
+  // to ctx.sender(), so no explicit transferObjects needed
 
   const tx_bytes = await tx.build({ client: sui_client })
   const tx_base64 = toBase64(tx_bytes)
