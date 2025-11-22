@@ -81,12 +81,13 @@ export async function prepare(dir, options = {}) {
     throw new Error('Network must be "testnet" or "mainnet"')
   }
 
-  const config = read_versui_config()
+  const project_dir = join(dir, '..')
+  const config = read_versui_config(project_dir)
   const rpc_url =
-    config.rpc || getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet')
+    config?.rpc || getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet')
   const sui_client = new SuiClient({ url: rpc_url })
 
-  const sender_address = options.address || config.address
+  const sender_address = options.address || config?.address
   if (!sender_address) {
     throw new Error('No address. Use --address or run "versui configure".')
   }
@@ -96,7 +97,6 @@ export async function prepare(dir, options = {}) {
     )
   }
 
-  const project_dir = join(dir, '..')
   const ignore_patterns = read_ignore_patterns(project_dir)
 
   console.error('Scanning files...')

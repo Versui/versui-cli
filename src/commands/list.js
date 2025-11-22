@@ -24,7 +24,9 @@ export async function list(options = {}) {
     const address = get_active_address()
 
     // Create Sui client
-    const client = new SuiClient({ url: getFullnodeUrl(network) })
+    const client = new SuiClient({
+      url: getFullnodeUrl(/** @type {any} */ (network)),
+    })
 
     // Query sites
     const spinner = ora(`Fetching deployments from ${network}...`).start()
