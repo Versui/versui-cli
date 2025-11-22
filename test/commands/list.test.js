@@ -166,21 +166,13 @@ describe('format_sites_table', () => {
 
     const table_str = format_sites_table(sites, 'testnet')
 
-    // Should contain site IDs (shortened)
-    assert.match(table_str, /0xabc1\.\.\.123/)
-    assert.match(table_str, /0xdef4\.\.\.456/)
+    // Should contain full site IDs (not shortened)
+    assert.match(table_str, /0xabc123/)
+    assert.match(table_str, /0xdef456/)
 
     // Should contain names
     assert.match(table_str, /my-blog/)
     assert.match(table_str, /landing-v2/)
-
-    // Should contain file counts
-    assert.match(table_str, /42/)
-    assert.match(table_str, /18/)
-
-    // Should contain sizes
-    assert.match(table_str, /2\.29 MB/)
-    assert.match(table_str, /836 KB/)
 
     // Should contain summary
     assert.match(table_str, /2 sites found/)

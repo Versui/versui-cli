@@ -13,9 +13,13 @@ import logUpdate from 'log-update'
 
 import { hash_content } from '../lib/hash.js'
 import { scan_directory, get_content_type, read_file } from '../lib/files.js'
-import { MIME_TYPES_BROWSER } from '../lib/mime-browser.js'
-import { read_versui_config, get_aggregators } from '../lib/config.js'
+import {
+  read_versui_config,
+  get_aggregators,
+  get_site_name,
+} from '../lib/config.js'
 import { detect_service_worker, generate_sw_snippet } from '../lib/sw.js'
+import { generate_bootstrap } from '../lib/generate.js'
 
 import {
   validate_directory,
@@ -290,6 +294,7 @@ export async function deploy(dir, options = {}) {
     json: json_mode = false,
     yes: auto_yes = false,
     customSw: force_custom_sw = false,
+    name: cli_site_name = null,
   } = options
   let { network, epochs } = options
 
@@ -300,6 +305,7 @@ export async function deploy(dir, options = {}) {
     return deploy_json(dir, {
       network: network || 'testnet',
       epochs: epochs || 1,
+      name: cli_site_name,
     })
   }
 
@@ -311,6 +317,24 @@ export async function deploy(dir, options = {}) {
   // Read .versui config from project root (parent of dist dir)
   const project_dir = join(dir, '..')
   const versui_config = read_versui_config(project_dir)
+
+  // Read package.json from project root
+  let package_json = null
+  const package_json_path = join(project_dir, 'package.json')
+  if (existsSync(package_json_path)) {
+    try {
+      package_json = JSON.parse(read_file(package_json_path))
+    } catch {
+      // Ignore invalid package.json
+    }
+  }
+
+  // Resolve site name with priority cascade
+  const site_name = get_site_name({
+    cli_name: cli_site_name,
+    versui_config,
+    package_json,
+  })
 
   // Show header once
   console.log('')
@@ -481,7 +505,7 @@ export async function deploy(dir, options = {}) {
     const tx = create_site_transaction({
       package_id,
       wallet: state.wallet,
-      site_name: 'Versui Site',
+      site_name,
       quilt_patches,
       file_metadata,
     })
@@ -583,7 +607,7 @@ export async function deploy(dir, options = {}) {
 
       const aggregators = get_aggregators(versui_config, network)
       const { html, sw } = generate_bootstrap(
-        'Versui Site',
+        site_name,
         aggregators,
         resource_map,
       )
@@ -672,13 +696,32 @@ export async function deploy(dir, options = {}) {
 
 async function deploy_json(dir, options) {
   // Minimal JSON-only flow for scripts
-  const { network, epochs } = options
+  const { network, epochs, name: cli_site_name = null } = options
 
   execSync('which walrus', { stdio: 'pipe' })
   execSync('which sui', { stdio: 'pipe' })
 
   const wallet = get_sui_active_address()
   if (!wallet) throw new Error('No wallet')
+
+  // Read configs for site name resolution
+  const project_dir = join(dir, '..')
+  const versui_config = read_versui_config(project_dir)
+  let package_json = null
+  const package_json_path = join(project_dir, 'package.json')
+  if (existsSync(package_json_path)) {
+    try {
+      package_json = JSON.parse(read_file(package_json_path))
+    } catch {
+      // Ignore invalid package.json
+    }
+  }
+
+  const site_name = get_site_name({
+    cli_name: cli_site_name,
+    versui_config,
+    package_json,
+  })
 
   const file_paths = scan_directory(dir, dir)
   const file_metadata = {}
@@ -720,7 +763,7 @@ async function deploy_json(dir, options) {
 
   const [site] = tx.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx.pure.string('Versui Site')],
+    arguments: [tx.pure.string(site_name)],
   })
 
   // Build identifier -> full path mapping (walrus flattens paths)
@@ -770,58 +813,6 @@ async function deploy_json(dir, options) {
       tx_digest: result?.digest,
     }),
   )
-}
-
-function generate_bootstrap(site_name, aggregators, resource_map) {
-  // XSS: escape for HTML context
-  const escaped_html = site_name
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-  const resources = JSON.stringify(resource_map)
-  const agg_json = JSON.stringify(aggregators)
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escaped_html}</title>
-<style>body{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#111;font-family:system-ui,sans-serif}.s{width:16px;height:16px;border:2px solid #333;border-top-color:#fff;border-radius:50%;animation:r .6s linear infinite}@keyframes r{to{transform:rotate(360deg)}}.e{text-align:center;max-width:400px;padding:2em}.e h1{color:#f97316;font-size:1.1em;margin:0 0 .4em;font-weight:500}.e p{color:#555;font-size:.75em;margin:0 0 1.2em;line-height:1.4}.retry{display:flex;align-items:center;justify-content:center;gap:6px;color:#333;font-size:.65em}.retry .s{width:10px;height:10px;border-width:1.5px}.nosw{color:#666;font-size:.8em;text-align:center;max-width:300px;line-height:1.5}</style>
-</head>
-<body>
-<div class="s" id="l"></div>
-<div class="e" id="err" style="display:none"><h1>Site Awaiting Renewal</h1><p>This site's storage has expired on Walrus. It will automatically load once the administrator renews it.</p><div class="retry"><div class="s"></div><span>Checking for renewal...</span></div></div>
-<div class="nosw" id="nosw" style="display:none">Your browser doesn't support Service Workers.<br>Please use a modern browser to view this site.</div>
-<script>
-(()=>{
-if(!('serviceWorker'in navigator)){document.getElementById('l').style.display='none';document.getElementById('nosw').style.display='block';return}
-let d=5000;
-const check=async()=>{try{
-if(!navigator.serviceWorker.controller){await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;location.reload();return}
-const i=await fetch('/index.html');if(!i.ok)throw new Error('expired');
-const h=await i.text();document.open();document.write(h);document.close()
-}catch(e){document.getElementById('l').style.display='none';document.getElementById('err').style.display='block';setTimeout(check,d);d=Math.min(d*1.5,60000)}};
-check()})();
-</script>
-</body>
-</html>`
-
-  const sw = `const A=${agg_json},R=${resources};
-const M=${JSON.stringify(MIME_TYPES_BROWSER)};
-self.addEventListener('install',()=>self.skipWaiting());
-self.addEventListener('activate',e=>e.waitUntil(clients.claim()));
-self.addEventListener('fetch',e=>{
-  const p=new URL(e.request.url).pathname;
-  const b=R[p];
-  if(b)e.respondWith((async()=>{
-    for(const a of A){try{const r=await fetch(a+'/v1/blobs/by-quilt-patch-id/'+b);if(r.ok){const ext=p.match(/\\.[^.]+$/)?.[0]||'';const type=M[ext]||'application/octet-stream';return new Response(await r.blob(),{headers:{'Content-Type':type}})}}catch(e){}}
-    return new Response('expired',{status:404});
-  })());
-});`
-
-  return { html, sw }
 }
 
 /**

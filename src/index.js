@@ -10,6 +10,7 @@ import chalk from 'chalk'
 import { deploy } from './commands/deploy.js'
 import { list } from './commands/list.js'
 import { delete_site } from './commands/delete.js'
+import { regenerate } from './commands/regenerate.js'
 
 const current_dir = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(
@@ -36,6 +37,7 @@ program
   .argument('<dir>', 'directory to deploy')
   .option('-e, --epochs <number>', 'storage duration in epochs')
   .option('--network <network>', 'sui network (testnet, mainnet)')
+  .option('-n, --name <name>', 'site name (overrides .versui and package.json)')
   .option('-y, --yes', 'skip confirmations (for CI/scripts)')
   .option('--json', 'output JSON only (for scripts/services)')
   .option('--custom-sw', 'force plugin mode (skip SW auto-detection)')
@@ -60,5 +62,39 @@ program
   .option('-y, --yes', 'skip confirmation prompt')
   .option('--network <network>', 'sui network (testnet, mainnet)')
   .action(delete_site)
+
+program
+  .command('regenerate')
+  .description('Regenerate bootstrap or SW snippet for an existing site')
+  .argument('<site-id>', 'site object ID')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .action(async (site_id, options) => {
+    try {
+      const result = await regenerate(site_id, options)
+
+      console.log('')
+      console.log(chalk.green('  ✓ Regenerated successfully!'))
+      console.log('')
+      console.log(chalk.dim('  Site:'), chalk.cyan(result.site_name))
+      console.log('')
+
+      if (result.output_type === 'bootstrap') {
+        console.log(chalk.dim('  Bootstrap HTML:'))
+        console.log('')
+        console.log(result.bootstrap_html)
+        console.log('')
+        console.log(chalk.dim('  Service Worker:'))
+        console.log('')
+        console.log(result.bootstrap_sw)
+      } else {
+        console.log(chalk.dim('  SW Plugin snippet:'))
+        console.log('')
+        console.log(result.sw_snippet)
+      }
+      console.log('')
+    } catch (error) {
+      handle_error(error)
+    }
+  })
 
 program.parse()

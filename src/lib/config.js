@@ -43,3 +43,32 @@ export function get_aggregators(config, network) {
   // Merge custom aggregators with defaults (custom first for priority)
   return [...config.aggregators, ...defaults]
 }
+
+/**
+ * Get site name with priority cascade
+ * Priority: CLI name → .versui name → package.json name → fallback
+ * @param {Object} options - Name resolution options
+ * @param {string|null} options.cli_name - Name from CLI flag
+ * @param {Object|null} options.versui_config - Versui configuration object
+ * @param {Object|null} options.package_json - package.json object
+ * @returns {string} Site name
+ */
+export function get_site_name({ cli_name, versui_config, package_json }) {
+  // Priority 1: CLI flag
+  if (cli_name && cli_name.trim().length > 0) {
+    return cli_name.trim()
+  }
+
+  // Priority 2: .versui config
+  if (versui_config?.name && versui_config.name.trim().length > 0) {
+    return versui_config.name.trim()
+  }
+
+  // Priority 3: package.json
+  if (package_json?.name && package_json.name.trim().length > 0) {
+    return package_json.name.trim()
+  }
+
+  // Fallback
+  return 'Versui Site'
+}

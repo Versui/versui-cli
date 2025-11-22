@@ -227,33 +227,17 @@ export function format_sites_table(sites, network) {
   }
 
   const table = new Table({
-    head: ['Site ID', 'Name', 'Files', 'Size'],
-    colWidths: [18, 20, 8, 12],
+    head: ['Site ID', 'Name'],
+    colWidths: [70, 30],
   })
 
   for (const site of sites) {
-    const short_id =
-      site.object_id.slice(0, 6) + '...' + site.object_id.slice(-3)
-    const size_str = format_bytes(site.total_size)
-
-    table.push([short_id, site.name, site.files_count, size_str])
+    table.push([site.object_id, site.name])
   }
 
   const summary = `\n  ${sites.length} site${sites.length === 1 ? '' : 's'} found`
 
   return table.toString() + summary
-}
-
-/**
- * Format bytes to human-readable string
- * @param {number} bytes - Bytes count
- * @returns {string} Formatted string (e.g., "1.2 MB")
- */
-function format_bytes(bytes) {
-  if (bytes === 0) return '0 B'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
 /**
