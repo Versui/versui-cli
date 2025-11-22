@@ -51,6 +51,7 @@ const state = {
   site_id: null,
   step: 'init', // init, config, scan, walrus, sui, done
   spinner_text: null,
+  upload_progress: 0,
 }
 
 // format_bytes moved to ./deploy/formatting.js and imported above
@@ -346,14 +347,12 @@ export async function deploy(dir, options = {}) {
       epochs = 1
     } else {
       // Get live epoch configuration from Walrus (or fallback to defaults)
-      const { epoch_duration_days, max_epochs } =
-        get_epoch_info_with_fallback(network)
-      const total_days = Math.floor(epoch_duration_days)
+      const { max_epochs } = get_epoch_info_with_fallback(network)
       const r = await prompts(
         {
           type: 'number',
           name: 'epochs',
-          message: `Storage duration in epochs (1 epoch = ${total_days} day${total_days === 1 ? '' : 's'}, max: ${max_epochs})`,
+          message: `Storage duration (epochs, max: ${max_epochs})`,
           initial: 1,
           min: 1,
           max: max_epochs,
