@@ -1,5 +1,6 @@
 import { describe, test, mock } from 'node:test'
 import assert from 'node:assert'
+
 import {
   encode_files,
   upload_files_to_nodes,
@@ -104,12 +105,19 @@ describe('upload_files_to_nodes', () => {
     const files = [{ content: Buffer.from('test content') }]
     const blob_object_ids = ['blob_obj_123']
 
-    const result = await upload_files_to_nodes(mock_walrus_client, files, blob_object_ids)
+    const result = await upload_files_to_nodes(
+      mock_walrus_client,
+      files,
+      blob_object_ids,
+    )
 
     assert.strictEqual(result.length, 1)
     assert.strictEqual(result[0].length, 2) // null filtered out
     assert.strictEqual(mock_walrus_client.encodeBlob.mock.calls.length, 1)
-    assert.strictEqual(mock_walrus_client.writeEncodedBlobToNodes.mock.calls.length, 1)
+    assert.strictEqual(
+      mock_walrus_client.writeEncodedBlobToNodes.mock.calls.length,
+      1,
+    )
   })
 
   test('should upload multiple files', async () => {
@@ -130,11 +138,18 @@ describe('upload_files_to_nodes', () => {
     ]
     const blob_object_ids = ['obj1', 'obj2']
 
-    const result = await upload_files_to_nodes(mock_walrus_client, files, blob_object_ids)
+    const result = await upload_files_to_nodes(
+      mock_walrus_client,
+      files,
+      blob_object_ids,
+    )
 
     assert.strictEqual(result.length, 2)
     assert.strictEqual(mock_walrus_client.encodeBlob.mock.calls.length, 2)
-    assert.strictEqual(mock_walrus_client.writeEncodedBlobToNodes.mock.calls.length, 2)
+    assert.strictEqual(
+      mock_walrus_client.writeEncodedBlobToNodes.mock.calls.length,
+      2,
+    )
   })
 
   test('should pass deletable option (default true)', async () => {
@@ -195,7 +210,11 @@ describe('upload_files_to_nodes', () => {
     const files = [{ content: Buffer.from('test') }]
     const blob_object_ids = ['obj1']
 
-    const result = await upload_files_to_nodes(mock_walrus_client, files, blob_object_ids)
+    const result = await upload_files_to_nodes(
+      mock_walrus_client,
+      files,
+      blob_object_ids,
+    )
 
     assert.strictEqual(result[0].length, 2) // Only non-null confirmations
   })

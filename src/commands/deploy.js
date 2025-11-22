@@ -555,9 +555,7 @@ export async function deploy(dir, options = {}) {
       chalk.dim('  Versui can generate a bootstrap for you, or you can'),
     )
     console.log(
-      chalk.dim(
-        '  integrate manually if you have a custom service worker.',
-      ),
+      chalk.dim('  integrate manually if you have a custom service worker.'),
     )
     console.log('')
 

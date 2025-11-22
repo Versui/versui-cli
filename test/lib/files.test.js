@@ -1,9 +1,14 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
-import { get_content_type, read_file, scan_directory } from '../../src/lib/files.js'
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+
+import {
+  get_content_type,
+  read_file,
+  scan_directory,
+} from '../../src/lib/files.js'
 
 describe('get_content_type', () => {
   test('should return correct MIME type for .js files', () => {
@@ -28,11 +33,17 @@ describe('get_content_type', () => {
 
   test('should fallback to application/octet-stream for unknown extensions', () => {
     // mime library returns 'chemical/x-xyz' for .xyz, let's use a truly unknown extension
-    assert.strictEqual(get_content_type('unknown.unknownext123'), 'application/octet-stream')
+    assert.strictEqual(
+      get_content_type('unknown.unknownext123'),
+      'application/octet-stream',
+    )
   })
 
   test('should fallback to application/octet-stream for no extension', () => {
-    assert.strictEqual(get_content_type('noextension'), 'application/octet-stream')
+    assert.strictEqual(
+      get_content_type('noextension'),
+      'application/octet-stream',
+    )
   })
 })
 
@@ -135,7 +146,10 @@ describe('scan_directory', () => {
     const dist_dir = join(parent_dir, 'dist')
     mkdirSync(dist_dir)
 
-    writeFileSync(join(parent_dir, '.versuignore'), '*.log\n\n\nnode_modules\n\n')
+    writeFileSync(
+      join(parent_dir, '.versuignore'),
+      '*.log\n\n\nnode_modules\n\n',
+    )
     writeFileSync(join(dist_dir, 'keep.txt'), 'keep')
     writeFileSync(join(dist_dir, 'debug.log'), 'log')
 

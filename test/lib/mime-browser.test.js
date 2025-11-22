@@ -1,5 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert'
+
 import { MIME_TYPES_BROWSER } from '../../src/lib/mime-browser.js'
 
 describe('MIME_TYPES_BROWSER', () => {
@@ -20,10 +21,7 @@ describe('MIME_TYPES_BROWSER', () => {
     ]
 
     for (const ext of expected_extensions) {
-      assert.ok(
-        ext in MIME_TYPES_BROWSER,
-        `Should contain ${ext} extension`,
-      )
+      assert.ok(ext in MIME_TYPES_BROWSER, `Should contain ${ext} extension`)
     }
   })
 

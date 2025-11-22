@@ -1,9 +1,10 @@
-import { describe, test, mock } from 'node:test'
+import { describe, test } from 'node:test'
 import assert from 'node:assert'
-import { read_versui_config, get_aggregators } from '../../src/lib/config.js'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+
+import { read_versui_config, get_aggregators } from '../../src/lib/config.js'
 
 describe('read_versui_config', () => {
   test('should return null when .versui file does not exist', () => {
@@ -79,7 +80,9 @@ describe('get_aggregators', () => {
   })
 
   test('should merge custom aggregators with testnet defaults (custom first)', () => {
-    const config = { aggregators: ['https://custom1.com', 'https://custom2.com'] }
+    const config = {
+      aggregators: ['https://custom1.com', 'https://custom2.com'],
+    }
     const result = get_aggregators(config, 'testnet')
 
     assert.strictEqual(result[0], 'https://custom1.com')
