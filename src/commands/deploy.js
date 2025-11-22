@@ -1,5 +1,5 @@
 import { existsSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 import { join, relative } from 'node:path'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
@@ -133,6 +133,15 @@ function render_state(include_header = false) {
   if (state.spinner_text) {
     lines.push('')
     lines.push(`  ${chalk.cyan('⠋')} ${state.spinner_text}`)
+
+    // Show progress bar if uploading
+    if (state.upload_progress > 0) {
+      const bar_width = 30
+      const filled = Math.floor((state.upload_progress / 100) * bar_width)
+      const empty = bar_width - filled
+      const bar = chalk.cyan('█'.repeat(filled)) + chalk.dim('░'.repeat(empty))
+      lines.push(`      ${bar} ${state.upload_progress}%`)
+    }
   }
 
   lines.push('')
@@ -409,23 +418,22 @@ export async function deploy(dir, options = {}) {
     auto_yes,
   )
 
+  // Upload to Walrus with progress tracking
   state.spinner_text = 'Uploading to Walrus...'
+  state.upload_progress = 0
   update_display()
 
-  // Upload to Walrus
-  let quilt_result
-  try {
-    const output = execSync(
-      `walrus store-quilt --paths "${dir}" --epochs ${epochs} --json`,
-      {
-        encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      },
-    )
-    quilt_result = JSON.parse(output)
-  } catch (err) {
-    throw new Error(`Walrus upload failed: ${err.stderr || err.message}`)
-  }
+  const quilt_result = await upload_to_walrus_with_progress(
+    dir,
+    epochs,
+    (progress, message) => {
+      state.upload_progress = progress
+      if (message) {
+        state.spinner_text = `Uploading to Walrus... ${message}`
+      }
+      update_display()
+    },
+  )
 
   const blob_store = quilt_result.blobStoreResult
   state.blob_id =
@@ -434,6 +442,7 @@ export async function deploy(dir, options = {}) {
   const quilt_patches = quilt_result.storedQuiltBlobs || []
 
   state.spinner_text = null
+  state.upload_progress = 0
   update_display()
 
   // Build transaction
@@ -809,4 +818,71 @@ self.addEventListener('fetch',e=>{
 });`
 
   return { html, sw }
+}
+
+/**
+ * Upload to Walrus with progress tracking
+ * @param {string} dir - Directory to upload
+ * @param {number} epochs - Storage duration
+ * @param {Function} on_progress - Progress callback (progress: 0-100, message: string)
+ * @returns {Promise<Object>} Quilt result
+ */
+async function upload_to_walrus_with_progress(dir, epochs, on_progress) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'walrus',
+      ['store-quilt', '--paths', dir, '--epochs', String(epochs), '--json'],
+      {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    )
+
+    let stdout_data = ''
+    let stderr_data = ''
+    let last_progress = 0
+
+    child.stdout.on('data', chunk => {
+      stdout_data += chunk.toString()
+    })
+
+    child.stderr.on('data', chunk => {
+      stderr_data += chunk.toString()
+
+      // Parse progress from walrus CLI stderr output
+      // Walrus outputs progress like: "Uploading blob 1/5" or "Encoding blob 2/5"
+      const match = stderr_data.match(
+        /(Encoding|Uploading|Storing)\s+.*?(\d+)\/(\d+)/i,
+      )
+      if (match) {
+        const current = parseInt(match[2], 10)
+        const total = parseInt(match[3], 10)
+        const progress = Math.floor((current / total) * 100)
+        if (progress > last_progress) {
+          last_progress = progress
+          on_progress(progress, `${current}/${total}`)
+        }
+      }
+    })
+
+    child.on('error', err => {
+      reject(new Error(`Failed to spawn walrus: ${err.message}`))
+    })
+
+    child.on('close', code => {
+      if (code !== 0) {
+        reject(
+          new Error(`Walrus upload failed: ${stderr_data || 'Unknown error'}`),
+        )
+        return
+      }
+
+      try {
+        const result = JSON.parse(stdout_data)
+        on_progress(100, 'Complete')
+        resolve(result)
+      } catch (err) {
+        reject(new Error(`Failed to parse walrus output: ${err.message}`))
+      }
+    })
+  })
 }
