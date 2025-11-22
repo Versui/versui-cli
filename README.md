@@ -5,6 +5,7 @@
 
 **Deploy static sites to Walrus decentralized storage with Sui blockchain**
 
+[![npm version](https://img.shields.io/npm/v/@versui/cli.svg?style=for-the-badge)](https://www.npmjs.com/package/@versui/cli)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933.svg?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 
