@@ -317,337 +317,357 @@ export async function deploy(dir, options = {}) {
   console.log(render_header())
   console.log('')
 
-  const on_cancel = () => {
-    console.log(chalk.yellow('\n  Cancelled.\n'))
-    process.exit(0)
-  }
-
-  // Prompt network (or default for -y)
-  if (!network) {
-    if (auto_yes) {
-      network = 'testnet'
-    } else {
-      const r = await prompts(
-        {
-          type: 'select',
-          name: 'network',
-          message: 'Select network',
-          choices: [
-            {
-              title: chalk.yellow('Testnet') + chalk.dim(' (recommended)'),
-              value: 'testnet',
-            },
-            { title: chalk.green('Mainnet'), value: 'mainnet' },
-          ],
-        },
-        { onCancel: on_cancel },
-      )
-      if (!r.network) on_cancel()
-      ;({ network } = r)
-    }
-  }
-  state.network = network
-
-  // Prompt epochs (or default for -y)
-  if (!epochs) {
-    if (auto_yes) {
-      epochs = 1
-    } else {
-      // Get live epoch configuration from Walrus (or fallback to defaults)
-      const { max_epochs } = get_epoch_info_with_fallback(network)
-      const r = await prompts(
-        {
-          type: 'number',
-          name: 'epochs',
-          message: `Storage duration (epochs, max: ${max_epochs})`,
-          initial: 1,
-          min: 1,
-          max: max_epochs,
-        },
-        { onCancel: on_cancel },
-      )
-      if (r.epochs === undefined) on_cancel()
-      ;({ epochs } = r)
-    }
-  }
-  state.epochs = epochs
-
-  // Check prerequisites
-  const prereqs = check_prerequisites()
-  if (!prereqs.success) {
-    const [first_missing] = prereqs.missing
-    throw new Error(get_prerequisite_error(first_missing))
-  }
-
-  state.wallet = get_sui_active_address()
-  if (!state.wallet)
-    throw new Error('No active Sui wallet. Run: sui client new-address ed25519')
-
-  // Clear screen and show progress tracker
-  console.clear()
-  console.log('')
-  console.log(render_header())
-  console.log('')
-
-  // Scan files
-  state.step = 'scan'
-  state.spinner_text = 'Scanning directory...'
-  update_display()
-
-  const file_paths = scan_directory(dir, dir)
-  const { metadata: file_metadata, total_size } = build_files_metadata(
-    file_paths,
-    dir,
-  )
-
-  state.files_count = file_paths.length
-  state.total_size = total_size
-  state.spinner_text = null
-  update_display()
-
-  // Get cost estimate
-  state.walrus_cost = await get_walrus_price_estimate(state.total_size, epochs)
-
-  // Confirm Walrus upload
-  state.step = 'walrus'
-  await confirm_action(
-    'Upload to Walrus',
-    [
-      `${state.files_count} files (${format_bytes(state.total_size)})`,
-      `Storage: ${epochs} epoch(s) on ${network}`,
-      'Your wallet pays WAL tokens for storage.',
-    ],
-    'Estimated cost',
-    state.walrus_cost ? `~${state.walrus_cost.toFixed(4)} WAL` : 'unknown',
-    auto_yes,
-  )
-
-  // Upload to Walrus with progress tracking
-  state.spinner_text = 'Uploading to Walrus...'
-  state.upload_progress = 0
-  update_display()
-
-  // Start spinner animation (update every 80ms for smooth animation)
+  // Start global spinner animation (update every 80ms for smooth animation)
   const spinner_interval = setInterval(() => {
     if (state.spinner_text) {
       update_display()
     }
   }, 80)
 
-  const quilt_result = await upload_to_walrus_with_progress(
-    dir,
-    epochs,
-    (progress, message) => {
-      state.upload_progress = progress
-      if (message) {
-        state.spinner_text = `Uploading to Walrus... ${message}`
-      }
-      update_display()
-    },
-  )
-
-  // Stop spinner animation
-  clearInterval(spinner_interval)
-
-  const blob_store = quilt_result.blobStoreResult
-  state.blob_id =
-    blob_store?.newlyCreated?.blobObject?.blobId ||
-    blob_store?.alreadyCertified?.blobId
-  const quilt_patches = quilt_result.storedQuiltBlobs || []
-
-  state.spinner_text = null
-  state.upload_progress = 0
-  update_display()
-
-  // Build transaction
-  state.step = 'sui'
-  state.spinner_text = 'Building transaction...'
-  update_display()
-
-  const rpc_url = getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet')
-  const sui_client = new SuiClient({ url: rpc_url })
-
-  const package_id = VERSUI_PACKAGE_IDS[network]
-  if (!package_id) {
-    throw new Error(`Versui package not deployed on ${network} yet`)
+  const on_cancel = () => {
+    clearInterval(spinner_interval)
+    console.log(chalk.yellow('\n  Cancelled.\n'))
+    process.exit(0)
   }
 
-  const tx = create_site_transaction({
-    package_id,
-    wallet: state.wallet,
-    site_name: 'Versui Site',
-    quilt_patches,
-    file_metadata,
-  })
-
-  const tx_bytes = await tx.build({ client: sui_client })
-  const tx_base64 = toBase64(tx_bytes)
-
-  state.sui_cost = await get_sui_gas_estimate(tx_base64, sui_client)
-  state.spinner_text = null
-  update_display()
-
-  // Confirm Sui transaction
-  await confirm_action(
-    'Create Site on Sui',
-    [
-      'Creates a Site object you own',
-      `References ${quilt_patches.length} resources on Walrus`,
-      'Your wallet pays SUI gas fees.',
-    ],
-    'Estimated gas',
-    state.sui_cost ? `~${state.sui_cost.toFixed(6)} SUI` : '~0.01 SUI',
-    auto_yes,
-  )
-
-  state.spinner_text = 'Executing transaction...'
-  update_display()
-
-  // Execute transaction
-  let tx_result
   try {
-    const output = execSync(`sui client serialized-tx ${tx_base64} --json`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    tx_result = JSON.parse(output)
-  } catch (err) {
-    // Log orphaned blob for reference (walrus upload succeeded but sui tx failed)
-    if (state.blob_id) {
-      console.error(
-        chalk.yellow(`\n  ⚠ Walrus blob uploaded but Sui tx failed.`),
-      )
-      console.error(chalk.yellow(`    Orphaned blob ID: ${state.blob_id}`))
-      console.error(
-        chalk.dim(`    (Blob will expire after ${epochs} epoch(s))`),
-      )
+    // Prompt network (or default for -y)
+    if (!network) {
+      if (auto_yes) {
+        network = 'testnet'
+      } else {
+        const r = await prompts(
+          {
+            type: 'select',
+            name: 'network',
+            message: 'Select network',
+            choices: [
+              {
+                title: chalk.yellow('Testnet') + chalk.dim(' (recommended)'),
+                value: 'testnet',
+              },
+              { title: chalk.green('Mainnet'), value: 'mainnet' },
+            ],
+          },
+          { onCancel: on_cancel },
+        )
+        if (!r.network) on_cancel()
+        ;({ network } = r)
+      }
     }
-    throw new Error(`Transaction failed: ${err.stderr || err.message}`)
-  }
+    state.network = network
 
-  state.site_id = extract_site_id(tx_result)
+    // Prompt epochs (or default for -y)
+    if (!epochs) {
+      if (auto_yes) {
+        epochs = 1
+      } else {
+        // Get live epoch configuration from Walrus (or fallback to defaults)
+        const { max_epochs } = get_epoch_info_with_fallback(network)
+        const r = await prompts(
+          {
+            type: 'number',
+            name: 'epochs',
+            message: `Storage duration (epochs, max: ${max_epochs})`,
+            initial: 1,
+            min: 1,
+            max: max_epochs,
+          },
+          { onCancel: on_cancel },
+        )
+        if (r.epochs === undefined) on_cancel()
+        ;({ epochs } = r)
+      }
+    }
+    state.epochs = epochs
 
-  // Detect service worker in build (skip if --custom-sw flag)
-  let sw_detection
-  if (force_custom_sw) {
-    sw_detection = { type: 'custom', path: null }
-  } else {
-    sw_detection = await detect_service_worker(dir)
-  }
+    // Check prerequisites
+    const prereqs = check_prerequisites()
+    if (!prereqs.success) {
+      const [first_missing] = prereqs.missing
+      throw new Error(get_prerequisite_error(first_missing))
+    }
 
-  // If no SW detected, ask user interactively
-  if (sw_detection.type === 'none' && !auto_yes && !json_mode) {
+    state.wallet = get_sui_active_address()
+    if (!state.wallet)
+      throw new Error(
+        'No active Sui wallet. Run: sui client new-address ed25519',
+      )
+
+    // Clear screen and show progress tracker
+    console.clear()
     console.log('')
-    console.log(
-      chalk.yellow('⚠️  No service worker detected in build directory.'),
-    )
-    console.log('')
-    console.log(
-      chalk.dim('  Versui can generate a bootstrap for you, or you can'),
-    )
-    console.log(
-      chalk.dim('  integrate manually if you have a custom service worker.'),
-    )
+    console.log(render_header())
     console.log('')
 
-    const response = await prompts({
-      type: 'confirm',
-      name: 'has_custom_sw',
-      message: 'Do you have a custom service worker?',
-      initial: false,
+    // Scan files
+    state.step = 'scan'
+    state.spinner_text = 'Scanning directory...'
+    update_display()
+
+    const file_paths = scan_directory(dir, dir)
+    const { metadata: file_metadata, total_size } = build_files_metadata(
+      file_paths,
+      dir,
+    )
+
+    state.files_count = file_paths.length
+    state.total_size = total_size
+    state.spinner_text = null
+    update_display()
+
+    // Get cost estimate
+    state.walrus_cost = await get_walrus_price_estimate(
+      state.total_size,
+      epochs,
+    )
+
+    // Confirm Walrus upload
+    state.step = 'walrus'
+    await confirm_action(
+      'Upload to Walrus',
+      [
+        `${state.files_count} files (${format_bytes(state.total_size)})`,
+        `Storage: ${epochs} epoch(s) on ${network}`,
+        'Your wallet pays WAL tokens for storage.',
+      ],
+      'Estimated cost',
+      state.walrus_cost ? `~${state.walrus_cost.toFixed(4)} WAL` : 'unknown',
+      auto_yes,
+    )
+
+    // Upload to Walrus with progress tracking
+    state.spinner_text = 'Uploading to Walrus...'
+    state.upload_progress = 0
+    update_display()
+
+    const quilt_result = await upload_to_walrus_with_progress(
+      dir,
+      epochs,
+      (progress, message) => {
+        state.upload_progress = progress
+        if (message) {
+          state.spinner_text = `Uploading to Walrus... ${message}`
+        }
+        update_display()
+      },
+    )
+
+    const blob_store = quilt_result.blobStoreResult
+    state.blob_id =
+      blob_store?.newlyCreated?.blobObject?.blobId ||
+      blob_store?.alreadyCertified?.blobId
+    const quilt_patches = quilt_result.storedQuiltBlobs || []
+
+    state.spinner_text = null
+    state.upload_progress = 0
+    update_display()
+
+    // Build transaction
+    state.step = 'sui'
+    state.spinner_text = 'Building transaction...'
+    update_display()
+
+    const rpc_url = getFullnodeUrl(
+      network === 'mainnet' ? 'mainnet' : 'testnet',
+    )
+    const sui_client = new SuiClient({ url: rpc_url })
+
+    const package_id = VERSUI_PACKAGE_IDS[network]
+    if (!package_id) {
+      throw new Error(`Versui package not deployed on ${network} yet`)
+    }
+
+    const tx = create_site_transaction({
+      package_id,
+      wallet: state.wallet,
+      site_name: 'Versui Site',
+      quilt_patches,
+      file_metadata,
     })
 
-    if (response.has_custom_sw) {
+    const tx_bytes = await tx.build({ client: sui_client })
+    const tx_base64 = toBase64(tx_bytes)
+
+    state.sui_cost = await get_sui_gas_estimate(tx_base64, sui_client)
+    state.spinner_text = null
+    update_display()
+
+    // Confirm Sui transaction
+    await confirm_action(
+      'Create Site on Sui',
+      [
+        'Creates a Site object you own',
+        `References ${quilt_patches.length} resources on Walrus`,
+        'Your wallet pays SUI gas fees.',
+      ],
+      'Estimated gas',
+      state.sui_cost ? `~${state.sui_cost.toFixed(6)} SUI` : '~0.01 SUI',
+      auto_yes,
+    )
+
+    state.spinner_text = 'Executing transaction...'
+    update_display()
+
+    // Execute transaction
+    let tx_result
+    try {
+      const output = execSync(`sui client serialized-tx ${tx_base64} --json`, {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+      tx_result = JSON.parse(output)
+    } catch (err) {
+      // Log orphaned blob for reference (walrus upload succeeded but sui tx failed)
+      if (state.blob_id) {
+        console.error(
+          chalk.yellow(`\n  ⚠ Walrus blob uploaded but Sui tx failed.`),
+        )
+        console.error(chalk.yellow(`    Orphaned blob ID: ${state.blob_id}`))
+        console.error(
+          chalk.dim(`    (Blob will expire after ${epochs} epoch(s))`),
+        )
+      }
+      throw new Error(`Transaction failed: ${err.stderr || err.message}`)
+    }
+
+    state.site_id = extract_site_id(tx_result)
+
+    // Detect service worker in build (skip if --custom-sw flag)
+    let sw_detection
+    if (force_custom_sw) {
       sw_detection = { type: 'custom', path: null }
+    } else {
+      sw_detection = await detect_service_worker(dir)
     }
+
+    // If no SW detected, ask user interactively
+    if (sw_detection.type === 'none' && !auto_yes && !json_mode) {
+      console.log('')
+      console.log(
+        chalk.yellow('⚠️  No service worker detected in build directory.'),
+      )
+      console.log('')
+      console.log(
+        chalk.dim('  Versui can generate a bootstrap for you, or you can'),
+      )
+      console.log(
+        chalk.dim('  integrate manually if you have a custom service worker.'),
+      )
+      console.log('')
+
+      const response = await prompts({
+        type: 'confirm',
+        name: 'has_custom_sw',
+        message: 'Do you have a custom service worker?',
+        initial: false,
+      })
+
+      if (response.has_custom_sw) {
+        sw_detection = { type: 'custom', path: null }
+      }
+    }
+
+    // Generate bootstrap (only if no SW detected and user didn't say they have one)
+    if (sw_detection.type === 'none') {
+      const index_patch = quilt_patches.find(p => p.identifier === 'index.html')
+      if (!index_patch) throw new Error('No index.html found')
+
+      const identifier_to_path = build_identifier_map(file_metadata)
+      const resource_map = {}
+      for (const patch of quilt_patches) {
+        const full_path =
+          identifier_to_path[patch.identifier] || '/' + patch.identifier
+        resource_map[full_path] = patch.quiltPatchId
+      }
+
+      const aggregators = get_aggregators(versui_config, network)
+      const { html, sw } = generate_bootstrap(
+        'Versui Site',
+        aggregators,
+        resource_map,
+      )
+
+      const bootstrap_dir = join(process.cwd(), 'bootstrap')
+      if (existsSync(bootstrap_dir)) {
+        console.log(
+          chalk.yellow('  ⚠ bootstrap/ folder exists, overwriting...'),
+        )
+      }
+      mkdirSync(bootstrap_dir, { recursive: true })
+      writeFileSync(join(bootstrap_dir, 'index.html'), html)
+      writeFileSync(join(bootstrap_dir, 'sw.js'), sw)
+    }
+
+    state.step = 'done'
+    state.spinner_text = null
+    finish_display()
+
+    // Stop spinner animation
+    clearInterval(spinner_interval)
+
+    // Final output - clear and show final state
+    console.clear()
+    console.log('')
+    console.log(render_header())
+    console.log('')
+    console.log(render_state())
+    console.log(chalk.green.bold('  ✓ Deployment complete!'))
+    console.log('')
+    console.log(
+      `  ${chalk.dim('Site ID:')}     ${chalk.magenta(state.site_id)}`,
+    )
+    console.log(
+      `  ${chalk.dim('Blob ID:')}     ${chalk.magenta(state.blob_id)}`,
+    )
+
+    if (sw_detection.type === 'none') {
+      console.log(
+        `  ${chalk.dim('Bootstrap:')}   ${chalk.cyan('./bootstrap/index.html')}`,
+      )
+      console.log('')
+      console.log(
+        chalk.dim(
+          '  Host the bootstrap HTML anywhere to serve your site from Walrus.',
+        ),
+      )
+    } else {
+      // Build resource map for snippet
+      const identifier_to_path = build_identifier_map(file_metadata)
+      /** @type {Object<string, string>} */
+      const resource_map = {}
+      for (const patch of quilt_patches) {
+        const full_path =
+          identifier_to_path[patch.identifier] || '/' + patch.identifier
+        resource_map[full_path] = patch.quiltPatchId
+      }
+
+      const snippet = generate_sw_snippet(resource_map, sw_detection.path)
+
+      console.log(
+        `  ${chalk.dim('SW Detected:')} ${chalk.yellow(sw_detection.path)}`,
+      )
+      console.log('')
+      console.log(chalk.green('  ✓ Service worker detected!'))
+      console.log('')
+      console.log(chalk.dim('  Install the Versui SW plugin:'))
+      console.log('')
+      console.log(chalk.cyan('    npm install @versui/sw-plugin'))
+      console.log('')
+      snippet.split('\n').forEach(line => {
+        console.log(chalk.cyan(`  ${line}`))
+      })
+      console.log('')
+      console.log(
+        chalk.dim('  Docs: https://github.com/Versui/versui-sw-plugin#readme'),
+      )
+    }
+    console.log('')
+  } catch (error) {
+    // Clean up spinner on error
+    clearInterval(spinner_interval)
+    throw error
   }
-
-  // Generate bootstrap (only if no SW detected and user didn't say they have one)
-  if (sw_detection.type === 'none') {
-    const index_patch = quilt_patches.find(p => p.identifier === 'index.html')
-    if (!index_patch) throw new Error('No index.html found')
-
-    const identifier_to_path = build_identifier_map(file_metadata)
-    const resource_map = {}
-    for (const patch of quilt_patches) {
-      const full_path =
-        identifier_to_path[patch.identifier] || '/' + patch.identifier
-      resource_map[full_path] = patch.quiltPatchId
-    }
-
-    const aggregators = get_aggregators(versui_config, network)
-    const { html, sw } = generate_bootstrap(
-      'Versui Site',
-      aggregators,
-      resource_map,
-    )
-
-    const bootstrap_dir = join(process.cwd(), 'bootstrap')
-    if (existsSync(bootstrap_dir)) {
-      console.log(chalk.yellow('  ⚠ bootstrap/ folder exists, overwriting...'))
-    }
-    mkdirSync(bootstrap_dir, { recursive: true })
-    writeFileSync(join(bootstrap_dir, 'index.html'), html)
-    writeFileSync(join(bootstrap_dir, 'sw.js'), sw)
-  }
-
-  state.step = 'done'
-  state.spinner_text = null
-  finish_display()
-
-  // Final output - clear and show final state
-  console.clear()
-  console.log('')
-  console.log(render_header())
-  console.log('')
-  console.log(render_state())
-  console.log(chalk.green.bold('  ✓ Deployment complete!'))
-  console.log('')
-  console.log(`  ${chalk.dim('Site ID:')}     ${chalk.magenta(state.site_id)}`)
-  console.log(`  ${chalk.dim('Blob ID:')}     ${chalk.magenta(state.blob_id)}`)
-
-  if (sw_detection.type === 'none') {
-    console.log(
-      `  ${chalk.dim('Bootstrap:')}   ${chalk.cyan('./bootstrap/index.html')}`,
-    )
-    console.log('')
-    console.log(
-      chalk.dim(
-        '  Host the bootstrap HTML anywhere to serve your site from Walrus.',
-      ),
-    )
-  } else {
-    // Build resource map for snippet
-    const identifier_to_path = build_identifier_map(file_metadata)
-    /** @type {Object<string, string>} */
-    const resource_map = {}
-    for (const patch of quilt_patches) {
-      const full_path =
-        identifier_to_path[patch.identifier] || '/' + patch.identifier
-      resource_map[full_path] = patch.quiltPatchId
-    }
-
-    const snippet = generate_sw_snippet(resource_map, sw_detection.path)
-
-    console.log(
-      `  ${chalk.dim('SW Detected:')} ${chalk.yellow(sw_detection.path)}`,
-    )
-    console.log('')
-    console.log(chalk.green('  ✓ Service worker detected!'))
-    console.log('')
-    console.log(chalk.dim('  Install the Versui SW plugin:'))
-    console.log('')
-    console.log(chalk.cyan('    npm install @versui/sw-plugin'))
-    console.log('')
-    snippet.split('\n').forEach(line => {
-      console.log(chalk.cyan(`  ${line}`))
-    })
-    console.log('')
-    console.log(
-      chalk.dim('  Docs: https://github.com/Versui/versui-sw-plugin#readme'),
-    )
-  }
-  console.log('')
 }
 
 async function deploy_json(dir, options) {
