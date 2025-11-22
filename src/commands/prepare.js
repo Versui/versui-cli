@@ -81,7 +81,7 @@ export async function prepare(dir, options = {}) {
     throw new Error('Network must be "testnet" or "mainnet"')
   }
 
-  const config = read_config()
+  const config = read_versui_config()
   const rpc_url =
     config.rpc || getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet')
   const sui_client = new SuiClient({ url: rpc_url })
