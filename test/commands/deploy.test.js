@@ -3,10 +3,10 @@ import assert from 'node:assert'
 import { EventEmitter } from 'node:events'
 
 import {
-  format_bytes,
   get_sui_active_address,
   upload_to_walrus_with_progress,
 } from '../../src/commands/deploy.js'
+import { format_bytes } from '../../src/commands/deploy/formatting.js'
 
 describe('format_bytes', () => {
   test('should format bytes < 1024 as B', () => {
