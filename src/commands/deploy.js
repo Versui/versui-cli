@@ -473,13 +473,12 @@ export async function deploy(dir, options = {}) {
     identifier_to_path[filename] = rel_path
   }
 
-  const resources = []
   for (const patch of quilt_patches) {
     const full_path =
       identifier_to_path[patch.identifier] || '/' + patch.identifier
     const info = file_metadata[full_path]
     if (!info) continue
-    const [resource] = tx.moveCall({
+    tx.moveCall({
       target: `${package_id}::site::create_resource`,
       arguments: [
         site,
@@ -490,10 +489,9 @@ export async function deploy(dir, options = {}) {
         tx.pure.u64(info.size),
       ],
     })
-    resources.push(resource)
   }
 
-  tx.transferObjects([site, ...resources], state.wallet)
+  tx.transferObjects([site], state.wallet)
 
   const tx_bytes = await tx.build({ client: sui_client })
   const tx_base64 = toBase64(tx_bytes)
