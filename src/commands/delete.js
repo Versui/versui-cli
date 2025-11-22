@@ -51,7 +51,9 @@ export async function delete_site(site_id, options = {}) {
     }
 
     // Create Sui client
-    const client = new SuiClient({ url: getFullnodeUrl(network) })
+    const client = new SuiClient({
+      url: getFullnodeUrl(/** @type {any} */ (network)),
+    })
 
     // Build delete transaction
     const spinner = ora('Building delete transaction...').start()
@@ -78,7 +80,7 @@ export async function delete_site(site_id, options = {}) {
     if (!signature_match) {
       throw new Error('Failed to extract signature from sui keytool output')
     }
-    const signature = signature_match[1]
+    const [, signature] = signature_match
     spinner.succeed('Transaction signed')
 
     // Execute transaction

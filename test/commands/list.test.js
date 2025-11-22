@@ -37,7 +37,7 @@ describe('query_owned_sites', () => {
         ],
         hasNextPage: false,
       })),
-      getDynamicFields: mock.fn(async (opts) => {
+      getDynamicFields: mock.fn(async opts => {
         if (opts.parentId === '0xabc123') {
           return { data: Array(42).fill({}), hasNextPage: false } // 42 resources
         }
@@ -64,12 +64,9 @@ describe('query_owned_sites', () => {
 
     // Verify getOwnedObjects was called with correct params
     assert.equal(mock_client.getOwnedObjects.mock.calls.length, 1)
-    const call_args = mock_client.getOwnedObjects.mock.calls[0].arguments[0]
+    const [call_args] = mock_client.getOwnedObjects.mock.calls[0].arguments
     assert.equal(call_args.owner, '0xuser123')
-    assert.equal(
-      call_args.filter.StructType,
-      '0x467::site::Site',
-    )
+    assert.equal(call_args.filter.StructType, '0x467::site::Site')
   })
 
   it('should return empty array when no sites found', async () => {
@@ -92,7 +89,7 @@ describe('query_owned_sites', () => {
   it('should handle pagination', async () => {
     let call_count = 0
     const mock_client = {
-      getOwnedObjects: mock.fn(async (opts) => {
+      getOwnedObjects: mock.fn(async opts => {
         call_count++
         if (call_count === 1) {
           return {

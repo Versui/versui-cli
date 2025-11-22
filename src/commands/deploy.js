@@ -17,7 +17,6 @@ import { MIME_TYPES_BROWSER } from '../lib/mime-browser.js'
 import { read_versui_config, get_aggregators } from '../lib/config.js'
 import { detect_service_worker } from '../lib/sw.js'
 
-const WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space'
 const VERSUI_PACKAGE_ID =
   '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b'
 const versui_gradient = gradient(['#00d4ff', '#00ffd1', '#7c3aed'])

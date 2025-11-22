@@ -15,7 +15,7 @@ import { toBase64 } from '@mysten/sui/utils'
 import { WalrusClient } from '@mysten/walrus'
 
 import { hash_content } from '../lib/hash.js'
-import { read_config } from '../lib/config.js'
+import { read_versui_config } from '../lib/config.js'
 
 function get_content_type(file_path) {
   return mime.getType(file_path) || 'application/octet-stream'

@@ -171,18 +171,18 @@ import { versui_plugin } from '@versui/vite-plugin'
 export default defineConfig({
   plugins: [
     versui_plugin({
-      site_id: '0xabc123...' // From deploy output
+      site_id: '0xabc123...', // From deploy output
     }),
     VitePWA({
       workbox: {
         // Your existing Workbox config
         runtimeCaching: [
           // ... existing strategies ...
-        ]
+        ],
         // Versui plugin auto-injects Walrus fetch strategy
-      }
-    })
-  ]
+      },
+    }),
+  ],
 })
 ```
 

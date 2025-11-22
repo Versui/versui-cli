@@ -128,9 +128,7 @@ Create a `.versui` file at your project root to customize behavior:
 
 ```json
 {
-  "aggregators": [
-    "https://my-custom-aggregator.example.com"
-  ]
+  "aggregators": ["https://my-custom-aggregator.example.com"]
 }
 ```
 
