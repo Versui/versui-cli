@@ -227,8 +227,8 @@ export function format_sites_table(sites, network) {
   }
 
   const table = new Table({
-    head: ['Site ID', 'Name', 'Files', 'Size', 'Network'],
-    colWidths: [18, 15, 8, 12, 10],
+    head: ['Site ID', 'Name', 'Files', 'Size'],
+    colWidths: [18, 20, 8, 12],
   })
 
   for (const site of sites) {
@@ -236,10 +236,10 @@ export function format_sites_table(sites, network) {
       site.object_id.slice(0, 6) + '...' + site.object_id.slice(-3)
     const size_str = format_bytes(site.total_size)
 
-    table.push([short_id, site.name, site.files_count, size_str, site.network])
+    table.push([short_id, site.name, site.files_count, size_str])
   }
 
-  const summary = `\n${sites.length} site${sites.length === 1 ? '' : 's'} found on ${network}`
+  const summary = `\n  ${sites.length} site${sites.length === 1 ? '' : 's'} found`
 
   return table.toString() + summary
 }

@@ -182,11 +182,8 @@ describe('format_sites_table', () => {
     assert.match(table_str, /2\.29 MB/)
     assert.match(table_str, /836 KB/)
 
-    // Should contain network
-    assert.match(table_str, /testnet/)
-
     // Should contain summary
-    assert.match(table_str, /2 sites found on testnet/)
+    assert.match(table_str, /2 sites found/)
   })
 
   it('should return empty state message when no sites', () => {

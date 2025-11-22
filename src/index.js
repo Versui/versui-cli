@@ -1,11 +1,20 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { Command } from 'commander'
 import chalk from 'chalk'
 
 import { deploy } from './commands/deploy.js'
 import { list } from './commands/list.js'
 import { delete_site } from './commands/delete.js'
+
+const current_dir = dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(
+  readFileSync(join(current_dir, '../package.json'), 'utf-8'),
+)
 
 function handle_error(error) {
   console.error('')
@@ -19,7 +28,7 @@ const program = new Command()
 program
   .name('versui')
   .description('Deploy static sites to Walrus decentralized storage')
-  .version('0.1.0')
+  .version(pkg.version)
 
 program
   .command('deploy')

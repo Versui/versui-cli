@@ -41,9 +41,14 @@ export async function list(options = {}) {
 
     spinner.stop()
 
+    // Display network and address header
+    console.log('')
+    console.log(chalk.dim('  Network: ') + chalk.cyan(network))
+    console.log(chalk.dim('  Address: ') + chalk.cyan(address))
+    console.log('')
+
     // Format and display
     const table_str = format_sites_table(sites, network)
-    console.log('')
     console.log(table_str)
     console.log('')
   } catch (error) {
