@@ -15,10 +15,12 @@ import { hash_content } from '../lib/hash.js'
 import { scan_directory, get_content_type, read_file } from '../lib/files.js'
 import { MIME_TYPES_BROWSER } from '../lib/mime-browser.js'
 import { read_versui_config, get_aggregators } from '../lib/config.js'
-import { detect_service_worker } from '../lib/sw.js'
+import { detect_service_worker, generate_sw_snippet } from '../lib/sw.js'
 
-const VERSUI_PACKAGE_ID =
-  '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b'
+const VERSUI_PACKAGE_IDS = {
+  testnet: '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b',
+  mainnet: null, // TODO: Add mainnet package ID when deployed
+}
 const versui_gradient = gradient(['#00d4ff', '#00ffd1', '#7c3aed'])
 
 // State for tracking progress
@@ -257,7 +259,11 @@ async function confirm_action(
 }
 
 export async function deploy(dir, options = {}) {
-  const { json: json_mode = false, yes: auto_yes = false } = options
+  const {
+    json: json_mode = false,
+    yes: auto_yes = false,
+    customSw: force_custom_sw = false,
+  } = options
   let { network, epochs } = options
 
   state.dir = dir
@@ -438,11 +444,16 @@ export async function deploy(dir, options = {}) {
   const rpc_url = getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet')
   const sui_client = new SuiClient({ url: rpc_url })
 
+  const package_id = VERSUI_PACKAGE_IDS[network]
+  if (!package_id) {
+    throw new Error(`Versui package not deployed on ${network} yet`)
+  }
+
   const tx = new Transaction()
   tx.setSender(state.wallet)
 
   const [site] = tx.moveCall({
-    target: `${VERSUI_PACKAGE_ID}::site::create_site`,
+    target: `${package_id}::site::create_site`,
     arguments: [tx.pure.string('Versui Site')],
   })
 
@@ -460,7 +471,7 @@ export async function deploy(dir, options = {}) {
     const info = file_metadata[full_path]
     if (!info) continue
     const [resource] = tx.moveCall({
-      target: `${VERSUI_PACKAGE_ID}::site::create_resource`,
+      target: `${package_id}::site::create_resource`,
       arguments: [
         site,
         tx.pure.string(full_path),
@@ -525,10 +536,44 @@ export async function deploy(dir, options = {}) {
       c => c.type === 'created' && c.objectType?.includes('::site::Site'),
     )?.objectId || 'unknown'
 
-  // Detect service worker in build
-  const sw_detection = await detect_service_worker(dir)
+  // Detect service worker in build (skip if --custom-sw flag)
+  let sw_detection
+  if (force_custom_sw) {
+    sw_detection = { type: 'custom', path: null }
+  } else {
+    sw_detection = await detect_service_worker(dir)
+  }
 
-  // Generate bootstrap (only if no SW detected)
+  // If no SW detected, ask user interactively
+  if (sw_detection.type === 'none' && !auto_yes && !json_mode) {
+    console.log('')
+    console.log(
+      chalk.yellow('⚠️  No service worker detected in build directory.'),
+    )
+    console.log('')
+    console.log(
+      chalk.dim('  Versui can generate a bootstrap for you, or you can'),
+    )
+    console.log(
+      chalk.dim(
+        '  integrate manually if you have a custom service worker.',
+      ),
+    )
+    console.log('')
+
+    const response = await prompts({
+      type: 'confirm',
+      name: 'has_custom_sw',
+      message: 'Do you have a custom service worker?',
+      initial: false,
+    })
+
+    if (response.has_custom_sw) {
+      sw_detection = { type: 'custom', path: null }
+    }
+  }
+
+  // Generate bootstrap (only if no SW detected and user didn't say they have one)
   if (sw_detection.type === 'none') {
     const index_patch = quilt_patches.find(p => p.identifier === 'index.html')
     if (!index_patch) throw new Error('No index.html found')
@@ -582,34 +627,33 @@ export async function deploy(dir, options = {}) {
       ),
     )
   } else {
+    // Build resource map for snippet
+    /** @type {Object<string, string>} */
+    const resource_map = {}
+    for (const patch of quilt_patches) {
+      const full_path =
+        identifier_to_path[patch.identifier] || '/' + patch.identifier
+      resource_map[full_path] = patch.quiltPatchId
+    }
+
+    const snippet = generate_sw_snippet(resource_map, sw_detection.path)
+
     console.log(
       `  ${chalk.dim('SW Detected:')} ${chalk.yellow(sw_detection.path)}`,
     )
     console.log('')
-    console.log(
-      chalk.yellow(
-        '  ⚠ Service worker detected. Add Versui Vite plugin to integrate:',
-      ),
-    )
+    console.log(chalk.green('  ✓ Service worker detected!'))
     console.log('')
-    console.log(chalk.dim('    npm install @versui/vite-plugin'))
+    console.log(chalk.dim('  Install the Versui SW plugin:'))
     console.log('')
-    console.log(chalk.dim('  In vite.config.js:'))
+    console.log(chalk.cyan('    npm install @versui/sw-plugin'))
     console.log('')
-    console.log(
-      chalk.cyan("    import { versui_plugin } from '@versui/vite-plugin'"),
-    )
-    console.log('')
-    console.log(chalk.cyan('    export default defineConfig({'))
-    console.log(chalk.cyan('      plugins: ['))
-    console.log(
-      chalk.cyan(`        versui_plugin({ site_id: '${state.site_id}' })`),
-    )
-    console.log(chalk.cyan('      ]'))
-    console.log(chalk.cyan('    })'))
+    snippet.split('\n').forEach(line => {
+      console.log(chalk.cyan(`  ${line}`))
+    })
     console.log('')
     console.log(
-      chalk.dim('  See: https://docs.versui.app/advanced/vite-plugin'),
+      chalk.dim('  Docs: https://github.com/Versui/versui-sw-plugin#readme'),
     )
   }
   console.log('')
@@ -654,11 +698,17 @@ async function deploy_json(dir, options) {
   const sui_client = new SuiClient({
     url: getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet'),
   })
+
+  const package_id = VERSUI_PACKAGE_IDS[network]
+  if (!package_id) {
+    throw new Error(`Versui package not deployed on ${network} yet`)
+  }
+
   const tx = new Transaction()
   tx.setSender(wallet)
 
   const [site] = tx.moveCall({
-    target: `${VERSUI_PACKAGE_ID}::site::create_site`,
+    target: `${package_id}::site::create_site`,
     arguments: [tx.pure.string('Versui Site')],
   })
 
@@ -675,7 +725,7 @@ async function deploy_json(dir, options) {
     const info = file_metadata[full_path]
     if (!info) continue
     tx.moveCall({
-      target: `${VERSUI_PACKAGE_ID}::site::create_resource`,
+      target: `${package_id}::site::create_resource`,
       arguments: [
         site,
         tx.pure.string(full_path),

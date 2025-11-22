@@ -56,3 +56,28 @@ export async function detect_service_worker(
     path: null,
   }
 }
+
+/**
+ * Generate integration snippet for custom service worker
+ * @param {Object<string, string>} resource_map - Path to quilt patch ID mappings
+ * @param {string} [sw_path] - Path to detected service worker file (optional, for display)
+ * @returns {string} Code snippet for integrating Versui into existing SW
+ */
+export function generate_sw_snippet(resource_map, sw_path = null) {
+  const resources_json = JSON.stringify(resource_map, null, 2)
+    .split('\n')
+    .map((line, i) => (i === 0 ? line : '  ' + line))
+    .join('\n')
+
+  const sw_location = sw_path ? ` (${sw_path})` : ''
+
+  return `
+Add this to your service worker${sw_location}:
+
+import { create_versui_handler } from '@versui/sw-plugin'
+
+const versui = create_versui_handler()
+versui.load(${resources_json})
+self.addEventListener('fetch', e => versui.handle(e))
+`.trim()
+}

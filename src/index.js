@@ -29,6 +29,7 @@ program
   .option('--network <network>', 'sui network (testnet, mainnet)')
   .option('-y, --yes', 'skip confirmations (for CI/scripts)')
   .option('--json', 'output JSON only (for scripts/services)')
+  .option('--custom-sw', 'force plugin mode (skip SW auto-detection)')
   .action(async (dir, options) => {
     try {
       await deploy(dir, options)
