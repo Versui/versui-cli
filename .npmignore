@@ -1,0 +1,24 @@
+# Development files
+.github/
+test/
+.eslintrc
+.eslintignore
+.prettierrc
+.prettierignore
+tsconfig.json
+tsconfig.tsbuildinfo
+
+# Documentation
+SPEC.md
+
+# Git
+.git/
+.gitignore
+
+# Versui config
+.versui
+.versuignore
+
+# Misc
+*.log
+node_modules/

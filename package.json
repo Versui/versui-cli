@@ -3,6 +3,9 @@
   "version": "0.1.4",
   "description": "Deploy static sites to Walrus decentralized storage",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "versui": "./src/index.js"
   },
