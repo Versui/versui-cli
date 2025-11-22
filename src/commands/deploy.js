@@ -345,14 +345,15 @@ export async function deploy(dir, options = {}) {
       epochs = 1
     } else {
       const epoch_days = network === 'mainnet' ? 14 : 1
+      const max_epochs = network === 'mainnet' ? 53 : 200
       const r = await prompts(
         {
           type: 'number',
           name: 'epochs',
-          message: `Storage duration in epochs (1 epoch ≈ ${epoch_days} days)`,
+          message: `Storage duration in epochs (1 epoch ≈ ${epoch_days} days, max: ${max_epochs})`,
           initial: 1,
           min: 1,
-          max: 200,
+          max: max_epochs,
         },
         { onCancel: on_cancel },
       )
