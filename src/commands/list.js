@@ -6,7 +6,8 @@ import ora from 'ora'
 
 import { query_owned_sites, format_sites_table } from '../lib/sui.js'
 
-const PACKAGE_ID = '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b'
+const PACKAGE_ID =
+  '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b'
 
 /**
  * List deployments
@@ -23,7 +24,9 @@ export async function list(options = {}) {
     const address = get_active_address()
 
     // Create Sui client
-    const client = new SuiClient({ url: getFullnodeUrl(network) })
+    const client = new SuiClient({
+      url: getFullnodeUrl(/** @type {any} */ (network)),
+    })
 
     // Query sites
     const spinner = ora(`Fetching deployments from ${network}...`).start()

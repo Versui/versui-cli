@@ -14,6 +14,7 @@ import Table from 'cli-table3'
  * @property {string} blob_hash - SHA-256 hash of content
  * @property {string} content_type - MIME type
  * @property {number} size - File size in bytes
+ * @property {string} [resource_id] - Resource object ID (for updates)
  * @property {Object<string, string>} [headers] - Custom HTTP headers
  */
 
@@ -191,7 +192,7 @@ export async function query_owned_sites(owner, site_type, client) {
       if (!item.data?.content) continue
 
       const { objectId, content } = item.data
-      const fields = content.fields
+      const { fields } = content
 
       // Query resource count (dynamic fields)
       const resources_response = await client.getDynamicFields({
