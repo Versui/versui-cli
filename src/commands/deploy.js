@@ -822,18 +822,40 @@ async function upload_to_walrus_with_progress(
       stderr_data += chunk.toString()
 
       // Parse progress from walrus CLI stderr output
-      // Walrus outputs progress like: "Uploading blob 1/5" or "Encoding blob 2/5"
-      const match = stderr_data.match(
-        /(Encoding|Uploading|Storing)\s+.*?(\d+)\/(\d+)/i,
-      )
-      if (match) {
-        const current = parseInt(match[2], 10)
-        const total = parseInt(match[3], 10)
-        const progress = Math.floor((current / total) * 100)
-        if (progress > last_progress) {
-          last_progress = progress
-          on_progress(progress, `${current}/${total}`)
-        }
+      // Track different stages: encoding -> storing -> retrieving status -> obtaining resources
+      let progress = last_progress
+      let message = null
+
+      // Stage 1: Encoding (25%)
+      if (stderr_data.includes('encoded sliver pairs and metadata')) {
+        progress = 25
+        message = 'Encoding...'
+      }
+      // Stage 2: Storing (50%)
+      else if (
+        stderr_data.includes('storing') &&
+        stderr_data.includes('sliver')
+      ) {
+        progress = 50
+        message = 'Storing...'
+      }
+      // Stage 3: Retrieving status (75%)
+      else if (
+        stderr_data.includes('retrieved') &&
+        stderr_data.includes('blob statuses')
+      ) {
+        progress = 75
+        message = 'Verifying...'
+      }
+      // Stage 4: Obtaining resources (90%)
+      else if (stderr_data.includes('blob resources obtained')) {
+        progress = 90
+        message = 'Finalizing...'
+      }
+
+      if (progress > last_progress) {
+        last_progress = progress
+        on_progress(progress, message)
       }
     })
 
