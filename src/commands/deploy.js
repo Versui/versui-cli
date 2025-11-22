@@ -461,8 +461,10 @@ export async function deploy(dir, options = {}) {
   const tx = new Transaction()
   tx.setSender(state.wallet)
 
+  // Use non-entry functions (new + add_resource) instead of entry functions
+  // This allows us to keep the Site object in the transaction for multiple calls
   const [site] = tx.moveCall({
-    target: `${package_id}::site::create_site`,
+    target: `${package_id}::site::new`,
     arguments: [tx.pure.string('Versui Site')],
   })
 
@@ -473,13 +475,14 @@ export async function deploy(dir, options = {}) {
     identifier_to_path[filename] = rel_path
   }
 
+  const resources = []
   for (const patch of quilt_patches) {
     const full_path =
       identifier_to_path[patch.identifier] || '/' + patch.identifier
     const info = file_metadata[full_path]
     if (!info) continue
-    tx.moveCall({
-      target: `${package_id}::site::create_resource`,
+    const [resource] = tx.moveCall({
+      target: `${package_id}::site::add_resource`,
       arguments: [
         site,
         tx.pure.string(full_path),
@@ -489,10 +492,11 @@ export async function deploy(dir, options = {}) {
         tx.pure.u64(info.size),
       ],
     })
+    resources.push(resource)
   }
 
-  // Note: create_site and create_resource are entry functions that auto-transfer
-  // to ctx.sender(), so no explicit transferObjects needed
+  // Transfer Site + all Resources to wallet
+  tx.transferObjects([site, ...resources], state.wallet)
 
   const tx_bytes = await tx.build({ client: sui_client })
   const tx_base64 = toBase64(tx_bytes)
@@ -824,11 +828,17 @@ self.addEventListener('fetch',e=>{
  * @param {string} dir - Directory to upload
  * @param {number} epochs - Storage duration
  * @param {Function} on_progress - Progress callback (progress: 0-100, message: string)
+ * @param {Function} spawn_fn - Spawn function (injectable for testing)
  * @returns {Promise<Object>} Quilt result
  */
-async function upload_to_walrus_with_progress(dir, epochs, on_progress) {
+async function upload_to_walrus_with_progress(
+  dir,
+  epochs,
+  on_progress,
+  spawn_fn = spawn,
+) {
   return new Promise((resolve, reject) => {
-    const child = spawn(
+    const child = spawn_fn(
       'walrus',
       ['store-quilt', '--paths', dir, '--epochs', String(epochs), '--json'],
       {
@@ -884,4 +894,13 @@ async function upload_to_walrus_with_progress(dir, epochs, on_progress) {
       }
     })
   })
+}
+
+// Export testable functions
+export {
+  format_bytes,
+  get_sui_active_address,
+  get_walrus_price_estimate,
+  upload_to_walrus_with_progress,
+  generate_bootstrap,
 }
