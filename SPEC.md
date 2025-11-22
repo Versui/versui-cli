@@ -139,9 +139,9 @@ versui deploy ./dist
 
 ## Service Worker Strategies
 
-### Tier 1: No Existing SW (Auto-inject)
+### No Existing SW → Auto-inject Universal SW
 
-Generate universal service worker that:
+When no service worker detected in build output, Versui generates a universal service worker that:
 
 - Fetches Site object from Sui
 - Queries Resource objects by path (derived object queries)
@@ -150,19 +150,56 @@ Generate universal service worker that:
 - Caches in browser (Cache API)
 - Enables offline operation
 
-**Detection:** No `service-worker.js` or SW registration in HTML
+**Detection:** No `sw.js` or `service-worker.js` files in build directory
 
-### Tier 2: Workbox Detected (Plugin)
+**Output:** Bootstrap HTML + universal SW in `./bootstrap/` directory
 
-**Status:** Not yet implemented. Will integrate with existing Workbox service workers via plugin.
+### Existing SW Detected → Use @versui/vite-plugin
 
-**Detection:** `workbox-*.js` files or Workbox imports
+When service worker detected (Workbox, custom, or any SW file), deploy command skips bootstrap generation and instructs user to integrate via Vite plugin.
 
-### Tier 3: Custom SW (Manual Integration)
+**Detection:** `sw.js` or `service-worker.js` exists in build directory
 
-Provide integration guide for custom service workers.
+**Integration (Vite PWA example):**
 
-**Detection:** Custom SW registration or non-Workbox SW files
+```javascript
+// vite.config.js
+import { defineConfig } from 'vite'
+import { VitePWA } from 'vite-plugin-pwa'
+import { versui_plugin } from '@versui/vite-plugin'
+
+export default defineConfig({
+  plugins: [
+    versui_plugin({
+      site_id: '0xabc123...' // From deploy output
+    }),
+    VitePWA({
+      workbox: {
+        // Your existing Workbox config
+        runtimeCaching: [
+          // ... existing strategies ...
+        ]
+        // Versui plugin auto-injects Walrus fetch strategy
+      }
+    })
+  ]
+})
+```
+
+**How it works:**
+
+1. Plugin fetches Site + Resources from Sui at **build time**
+2. Generates Workbox runtime caching strategy automatically
+3. Injects Walrus aggregator fetch logic into service worker
+4. **Zero manual quiltPatchId management** - all automatic
+
+**Supported build tools:**
+
+- Vite + vite-plugin-pwa (primary)
+- Workbox CLI (manual config)
+- Custom service workers (with adapter)
+
+**Documentation:** https://docs.versui.app/advanced/vite-plugin
 
 ## Content Authentication
 

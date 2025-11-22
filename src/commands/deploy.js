@@ -13,10 +13,13 @@ import logUpdate from 'log-update'
 
 import { hash_content } from '../lib/hash.js'
 import { scan_directory, get_content_type, read_file } from '../lib/files.js'
+import { MIME_TYPES_BROWSER } from '../lib/mime-browser.js'
+import { read_versui_config, get_aggregators } from '../lib/config.js'
+import { detect_service_worker } from '../lib/sw.js'
 
 const WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space'
 const VERSUI_PACKAGE_ID =
-  '0x513aa930ec7a1ff2f813c30aabe8c565024d6e7cdcc7fd4b796d3dd8fad84833'
+  '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b'
 const versui_gradient = gradient(['#00d4ff', '#00ffd1', '#7c3aed'])
 
 // State for tracking progress
@@ -273,6 +276,10 @@ export async function deploy(dir, options = {}) {
     throw new Error(`Invalid directory: ${dir}`)
   }
 
+  // Read .versui config from project root (parent of dist dir)
+  const project_dir = join(dir, '..')
+  const versui_config = read_versui_config(project_dir)
+
   // Show header once
   console.log('')
   console.log(render_header())
@@ -519,34 +526,36 @@ export async function deploy(dir, options = {}) {
       c => c.type === 'created' && c.objectType?.includes('::site::Site'),
     )?.objectId || 'unknown'
 
-  // Generate bootstrap
-  const index_patch = quilt_patches.find(p => p.identifier === 'index.html')
-  if (!index_patch) throw new Error('No index.html found')
+  // Detect service worker in build
+  const sw_detection = await detect_service_worker(dir)
 
-  const resource_map = {}
-  for (const patch of quilt_patches) {
-    const full_path =
-      identifier_to_path[patch.identifier] || '/' + patch.identifier
-    resource_map[full_path] = patch.quiltPatchId
+  // Generate bootstrap (only if no SW detected)
+  if (sw_detection.type === 'none') {
+    const index_patch = quilt_patches.find(p => p.identifier === 'index.html')
+    if (!index_patch) throw new Error('No index.html found')
+
+    const resource_map = {}
+    for (const patch of quilt_patches) {
+      const full_path =
+        identifier_to_path[patch.identifier] || '/' + patch.identifier
+      resource_map[full_path] = patch.quiltPatchId
+    }
+
+    const aggregators = get_aggregators(versui_config, network)
+    const { html, sw } = generate_bootstrap(
+      'Versui Site',
+      aggregators,
+      resource_map,
+    )
+
+    const bootstrap_dir = join(process.cwd(), 'bootstrap')
+    if (existsSync(bootstrap_dir)) {
+      console.log(chalk.yellow('  ⚠ bootstrap/ folder exists, overwriting...'))
+    }
+    mkdirSync(bootstrap_dir, { recursive: true })
+    writeFileSync(join(bootstrap_dir, 'index.html'), html)
+    writeFileSync(join(bootstrap_dir, 'sw.js'), sw)
   }
-
-  const aggregators =
-    network === 'mainnet'
-      ? ['https://aggregator.walrus.space', 'https://wal-aggregator.stakin.io']
-      : [WALRUS_AGGREGATOR, 'https://aggregator.testnet.blob.store']
-  const { html, sw } = generate_bootstrap(
-    'Versui Site',
-    aggregators,
-    resource_map,
-  )
-
-  const bootstrap_dir = join(process.cwd(), 'bootstrap')
-  if (existsSync(bootstrap_dir)) {
-    console.log(chalk.yellow('  ⚠ bootstrap/ folder exists, overwriting...'))
-  }
-  mkdirSync(bootstrap_dir, { recursive: true })
-  writeFileSync(join(bootstrap_dir, 'index.html'), html)
-  writeFileSync(join(bootstrap_dir, 'sw.js'), sw)
 
   state.step = 'done'
   state.spinner_text = null
@@ -562,15 +571,48 @@ export async function deploy(dir, options = {}) {
   console.log('')
   console.log(`  ${chalk.dim('Site ID:')}     ${chalk.magenta(state.site_id)}`)
   console.log(`  ${chalk.dim('Blob ID:')}     ${chalk.magenta(state.blob_id)}`)
-  console.log(
-    `  ${chalk.dim('Bootstrap:')}   ${chalk.cyan('./bootstrap/index.html')}`,
-  )
-  console.log('')
-  console.log(
-    chalk.dim(
-      '  Host the bootstrap HTML anywhere to serve your site from Walrus.',
-    ),
-  )
+
+  if (sw_detection.type === 'none') {
+    console.log(
+      `  ${chalk.dim('Bootstrap:')}   ${chalk.cyan('./bootstrap/index.html')}`,
+    )
+    console.log('')
+    console.log(
+      chalk.dim(
+        '  Host the bootstrap HTML anywhere to serve your site from Walrus.',
+      ),
+    )
+  } else {
+    console.log(
+      `  ${chalk.dim('SW Detected:')} ${chalk.yellow(sw_detection.path)}`,
+    )
+    console.log('')
+    console.log(
+      chalk.yellow(
+        '  ⚠ Service worker detected. Add Versui Vite plugin to integrate:',
+      ),
+    )
+    console.log('')
+    console.log(chalk.dim('    npm install @versui/vite-plugin'))
+    console.log('')
+    console.log(chalk.dim('  In vite.config.js:'))
+    console.log('')
+    console.log(
+      chalk.cyan("    import { versui_plugin } from '@versui/vite-plugin'"),
+    )
+    console.log('')
+    console.log(chalk.cyan('    export default defineConfig({'))
+    console.log(chalk.cyan('      plugins: ['))
+    console.log(
+      chalk.cyan(`        versui_plugin({ site_id: '${state.site_id}' })`),
+    )
+    console.log(chalk.cyan('      ]'))
+    console.log(chalk.cyan('    })'))
+    console.log('')
+    console.log(
+      chalk.dim('  See: https://docs.versui.app/advanced/vite-plugin'),
+    )
+  }
   console.log('')
 }
 
@@ -707,7 +749,7 @@ check()})();
 </html>`
 
   const sw = `const A=${agg_json},R=${resources};
-const M={'.js':'text/javascript','.css':'text/css','.html':'text/html','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.ico':'image/x-icon','.woff2':'font/woff2','.woff':'font/woff','.ttf':'font/ttf','.eot':'application/vnd.ms-fontobject'};
+const M=${JSON.stringify(MIME_TYPES_BROWSER)};
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(clients.claim()));
 self.addEventListener('fetch',e=>{
