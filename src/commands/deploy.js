@@ -29,6 +29,7 @@ import {
   create_site_transaction,
   extract_site_id,
 } from './deploy/transaction.js'
+import { get_epoch_info_with_fallback } from './deploy/walrus-info.js'
 
 const VERSUI_PACKAGE_IDS = {
   testnet: '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b',
@@ -344,13 +345,15 @@ export async function deploy(dir, options = {}) {
     if (auto_yes) {
       epochs = 1
     } else {
-      const epoch_days = network === 'mainnet' ? 14 : 1
-      const max_epochs = network === 'mainnet' ? 53 : 200
+      // Get live epoch configuration from Walrus (or fallback to defaults)
+      const { epoch_duration_days, max_epochs } =
+        get_epoch_info_with_fallback(network)
+      const total_days = Math.floor(epoch_duration_days)
       const r = await prompts(
         {
           type: 'number',
           name: 'epochs',
-          message: `Storage duration in epochs (1 epoch ≈ ${epoch_days} days, max: ${max_epochs})`,
+          message: `Storage duration in epochs (1 epoch = ${total_days} day${total_days === 1 ? '' : 's'}, max: ${max_epochs})`,
           initial: 1,
           min: 1,
           max: max_epochs,
