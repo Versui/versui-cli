@@ -57,6 +57,7 @@ export async function build_create_site_transaction(name, sender, client) {
  * Requires AdminCap and shared Site ID from step 1
  * @param {string} admin_cap_id - AdminCap object ID
  * @param {string} site_id - Shared Site object ID
+ * @param {string} site_version - Site object version from step 1
  * @param {ResourceData[]} resources - Array of resources to add
  * @param {string} sender - Sender address
  * @param {Object} client - Sui client
@@ -65,6 +66,7 @@ export async function build_create_site_transaction(name, sender, client) {
 export async function build_add_resources_transaction(
   admin_cap_id,
   site_id,
+  site_version,
   resources,
   sender,
   client,
@@ -77,7 +79,11 @@ export async function build_add_resources_transaction(
       target: `${PACKAGE_ID}::site::add_resource`,
       arguments: [
         tx.object(admin_cap_id), // AdminCap reference (owned object)
-        tx.object(site_id), // Shared Site reference (SDK auto-detects shared vs owned)
+        tx.sharedObjectRef({
+          objectId: site_id,
+          initialSharedVersion: site_version,
+          mutable: true,
+        }), // Shared Site reference (mutable shared object)
         tx.pure.string(resource.path),
         tx.pure.string(resource.blob_id),
         tx.pure.vector(
@@ -106,6 +112,7 @@ export async function build_add_resources_transaction(
  * Build a transaction that updates existing Resources
  * @param {string} admin_cap_id - AdminCap object ID
  * @param {string} site_id - Shared Site object ID
+ * @param {string} site_version - Current Site object version
  * @param {ResourceData[]} resources - Resources to update (must include path)
  * @param {string} sender - Sender address
  * @param {Object} client - Sui client
@@ -114,6 +121,7 @@ export async function build_add_resources_transaction(
 export async function build_update_transaction(
   admin_cap_id,
   site_id,
+  site_version,
   resources,
   sender,
   client,
@@ -126,7 +134,11 @@ export async function build_update_transaction(
       target: `${PACKAGE_ID}::site::update_resource`,
       arguments: [
         tx.object(admin_cap_id), // AdminCap reference (owned object)
-        tx.object(site_id), // Shared Site reference (SDK auto-detects shared vs owned)
+        tx.sharedObjectRef({
+          objectId: site_id,
+          initialSharedVersion: site_version,
+          mutable: true,
+        }), // Shared Site reference (mutable shared object)
         tx.pure.string(resource.path), // Resource path
         tx.pure.string(resource.blob_id), // New blob ID
         tx.pure.vector(
@@ -273,6 +285,7 @@ export function format_sites_table(sites, network) {
  * Note: Site's Table must be empty (all resources deleted first)
  * @param {string} admin_cap_id - AdminCap object ID (will be consumed)
  * @param {string} site_id - Shared Site object ID to delete
+ * @param {string} site_version - Current Site object version
  * @param {string} sender - Sender address
  * @param {Object} client - Sui client
  * @returns {Promise<TransactionResult>} Transaction bytes
@@ -280,6 +293,7 @@ export function format_sites_table(sites, network) {
 export async function build_delete_transaction(
   admin_cap_id,
   site_id,
+  site_version,
   sender,
   client,
 ) {
@@ -290,7 +304,11 @@ export async function build_delete_transaction(
     target: `${PACKAGE_ID}::site::delete_site`,
     arguments: [
       tx.object(admin_cap_id), // AdminCap reference (consumed)
-      tx.object(site_id), // Shared Site reference (consumed, SDK auto-detects)
+      tx.sharedObjectRef({
+        objectId: site_id,
+        initialSharedVersion: site_version,
+        mutable: true,
+      }), // Shared Site reference (consumed)
     ],
   })
 
