@@ -575,9 +575,7 @@ export async function deploy(dir, options = {}) {
     state.site_id = site_id
 
     // === TRANSACTION 2: Add Resources ===
-    state.spinner_text = 'Building add resources transaction...'
-    update_display()
-
+    // Build transaction (fast, no spinner needed)
     const tx2 = add_resources_transaction({
       package_id,
       wallet: state.wallet,
@@ -629,6 +627,7 @@ export async function deploy(dir, options = {}) {
 
     // If no SW detected, ask user interactively
     if (sw_detection.type === 'none' && !auto_yes && !json_mode) {
+      finish_display() // Stop spinner before showing prompt
       console.log('')
       console.log(
         chalk.yellow('⚠️  No service worker detected in build directory.'),
