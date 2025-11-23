@@ -55,9 +55,41 @@ export async function delete_site(site_id, options = {}) {
       url: getFullnodeUrl(/** @type {any} */ (network)),
     })
 
+    // Find AdminCap for this site
+    const spinner = ora('Finding site AdminCap...').start()
+    const admin_cap_type = `0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d::site::SiteAdminCap`
+    const admin_caps = await client.getOwnedObjects({
+      owner: address,
+      filter: {
+        StructType: admin_cap_type,
+      },
+      options: {
+        showContent: true,
+      },
+    })
+
+    // Find AdminCap matching this site_id
+    let admin_cap_id = null
+    for (const item of admin_caps.data) {
+      if (!item.data?.content) continue
+      const { fields } = /** @type {any} */ (item.data.content)
+      if (fields.site_id === site_id) {
+        admin_cap_id = item.data.objectId
+        break
+      }
+    }
+
+    if (!admin_cap_id) {
+      throw new Error(
+        `AdminCap not found for site ${site_id}. You may not own this site.`,
+      )
+    }
+    spinner.succeed('AdminCap found')
+
     // Build delete transaction
-    const spinner = ora('Building delete transaction...').start()
+    spinner.start('Building delete transaction...')
     const { tx_bytes_base64 } = await build_delete_transaction(
+      admin_cap_id,
       site_id,
       address,
       client,

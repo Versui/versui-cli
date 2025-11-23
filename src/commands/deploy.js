@@ -759,14 +759,42 @@ async function deploy_json(dir, options) {
     throw new Error(`Versui package not deployed on ${network} yet`)
   }
 
-  const tx = new Transaction()
-  tx.setSender(wallet)
+  // === TRANSACTION 1: Create Site ===
+  const tx1 = new Transaction()
+  tx1.setSender(wallet)
 
-  const [site] = tx.moveCall({
+  // create_site returns AdminCap to sender, creates shared Site
+  tx1.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx.pure.string(site_name)],
+    arguments: [tx1.pure.string(site_name)],
   })
 
+  const tx1_bytes = await tx1.build({ client: sui_client })
+  const tx1_base64 = toBase64(tx1_bytes)
+
+  // Execute transaction 1 (sui client auto-signs and executes)
+  const tx1_output = execSync(`sui client serialized-tx ${tx1_base64} --json`, {
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+  const tx1_result = JSON.parse(tx1_output)
+
+  // Extract Site ID and AdminCap ID from transaction effects
+  const site_obj = tx1_result?.objectChanges?.find(
+    c => c.type === 'created' && c.objectType?.includes('::site::Site'),
+  )
+  const admin_cap_obj = tx1_result?.objectChanges?.find(
+    c => c.type === 'created' && c.objectType?.includes('::SiteAdminCap'),
+  )
+
+  if (!site_obj?.objectId || !admin_cap_obj?.objectId) {
+    throw new Error('Failed to extract Site ID or AdminCap ID from transaction')
+  }
+
+  const site_id = site_obj.objectId
+  const admin_cap_id = admin_cap_obj.objectId
+
+  // === TRANSACTION 2: Add Resources ===
   // Build identifier -> full path mapping (walrus flattens paths)
   const identifier_to_path = {}
   for (const rel_path of Object.keys(file_metadata)) {
@@ -774,44 +802,48 @@ async function deploy_json(dir, options) {
     identifier_to_path[filename] = rel_path
   }
 
+  const tx2 = new Transaction()
+  tx2.setSender(wallet)
+
+  // Add all resources to the shared Site
   for (const patch of patches) {
     const full_path =
       identifier_to_path[patch.identifier] || '/' + patch.identifier
     const info = file_metadata[full_path]
     if (!info) continue
-    tx.moveCall({
-      target: `${package_id}::site::create_resource`,
+
+    tx2.moveCall({
+      target: `${package_id}::site::add_resource`,
       arguments: [
-        site,
-        tx.pure.string(full_path),
-        tx.pure.string(patch.quiltPatchId),
-        tx.pure.vector('u8', Array.from(fromBase64(info.hash))),
-        tx.pure.string(info.content_type),
-        tx.pure.u64(info.size),
+        tx2.object(admin_cap_id), // AdminCap reference
+        tx2.object(site_id), // Shared Site reference
+        tx2.pure.string(full_path),
+        tx2.pure.string(patch.quiltPatchId),
+        tx2.pure.vector('u8', Array.from(fromBase64(info.hash))),
+        tx2.pure.string(info.content_type),
+        tx2.pure.u64(info.size),
       ],
     })
   }
 
-  tx.transferObjects([site], wallet)
-  const tx_bytes = await tx.build({ client: sui_client })
-  const tx_base64 = toBase64(tx_bytes)
+  const tx2_bytes = await tx2.build({ client: sui_client })
+  const tx2_base64 = toBase64(tx2_bytes)
 
-  const exec_output = execSync(`sui client serialized-tx ${tx_base64} --json`, {
+  // Execute transaction 2 (sui client auto-signs and executes)
+  const tx2_output = execSync(`sui client serialized-tx ${tx2_base64} --json`, {
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
   })
-  const result = JSON.parse(exec_output)
-
-  const site_id = result?.objectChanges?.find(
-    c => c.type === 'created' && c.objectType?.includes('::site::Site'),
-  )?.objectId
+  const tx2_result = JSON.parse(tx2_output)
 
   console.log(
     JSON.stringify({
       site_id,
+      admin_cap_id,
       blob_id,
       patches: patches.length,
-      tx_digest: result?.digest,
+      tx1_digest: tx1_result?.digest,
+      tx2_digest: tx2_result?.digest,
     }),
   )
 }

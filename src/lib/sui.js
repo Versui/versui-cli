@@ -24,35 +24,62 @@ const PACKAGE_ID =
   '0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d'
 
 /**
- * Build a transaction that creates a Site and all Resources
+ * Build a transaction that creates a Site (step 1 of deployment)
+ * Returns AdminCap to sender, creates shared Site object
  * @param {string} name - Site name
- * @param {ResourceData[]} resources - Array of resources to create
  * @param {string} sender - Sender address
  * @param {Object} client - Sui client
  * @returns {Promise<TransactionResult>} Transaction bytes
  */
-export async function build_deploy_transaction(
-  name,
+export async function build_create_site_transaction(name, sender, client) {
+  const tx = new Transaction()
+
+  // Call create_site (returns AdminCap to sender, shares Site)
+  tx.moveCall({
+    target: `${PACKAGE_ID}::site::create_site`,
+    arguments: [tx.pure.string(name)],
+  })
+
+  // Set sender
+  tx.setSender(sender)
+
+  // Build transaction bytes
+  const tx_bytes = await tx.build({ client })
+
+  return {
+    tx_bytes,
+    tx_bytes_base64: Buffer.from(tx_bytes).toString('base64'),
+  }
+}
+
+/**
+ * Build a transaction that adds resources to a Site (step 2 of deployment)
+ * Requires AdminCap and shared Site ID from step 1
+ * @param {string} admin_cap_id - AdminCap object ID
+ * @param {string} site_id - Shared Site object ID
+ * @param {ResourceData[]} resources - Array of resources to add
+ * @param {string} sender - Sender address
+ * @param {Object} client - Sui client
+ * @returns {Promise<TransactionResult>} Transaction bytes
+ */
+export async function build_add_resources_transaction(
+  admin_cap_id,
+  site_id,
   resources,
   sender,
   client,
 ) {
   const tx = new Transaction()
 
-  // Call create_site to get Site object
-  const site = tx.moveCall({
-    target: `${PACKAGE_ID}::site::create_site`,
-    arguments: [tx.pure.string(name)],
-  })
-
-  // Create all resources
+  // Add all resources
   for (const resource of resources) {
     tx.moveCall({
-      target: `${PACKAGE_ID}::site::create_resource`,
+      target: `${PACKAGE_ID}::site::add_resource`,
       arguments: [
-        site,
+        tx.object(admin_cap_id), // AdminCap reference
+        tx.object(site_id), // Shared Site reference
         tx.pure.string(resource.path),
-        tx.pure.u256(BigInt(resource.blob_id)),
+        tx.pure.string(resource.blob_id),
         tx.pure.vector(
           'u8',
           Array.from(Buffer.from(resource.blob_hash, 'hex')),
@@ -62,9 +89,6 @@ export async function build_deploy_transaction(
       ],
     })
   }
-
-  // Transfer Site to sender
-  tx.transferObjects([site], sender)
 
   // Set sender
   tx.setSender(sender)
@@ -80,13 +104,15 @@ export async function build_deploy_transaction(
 
 /**
  * Build a transaction that updates existing Resources
- * @param {string} site_id - Site object ID
- * @param {ResourceData[]} resources - Resources to update
+ * @param {string} admin_cap_id - AdminCap object ID
+ * @param {string} site_id - Shared Site object ID
+ * @param {ResourceData[]} resources - Resources to update (must include path)
  * @param {string} sender - Sender address
  * @param {Object} client - Sui client
  * @returns {Promise<TransactionResult>} Transaction bytes
  */
 export async function build_update_transaction(
+  admin_cap_id,
   site_id,
   resources,
   sender,
@@ -99,8 +125,10 @@ export async function build_update_transaction(
     tx.moveCall({
       target: `${PACKAGE_ID}::site::update_resource`,
       arguments: [
-        tx.object(resource.resource_id),
-        tx.pure.u256(BigInt(resource.blob_id)),
+        tx.object(admin_cap_id), // AdminCap reference
+        tx.object(site_id), // Shared Site reference
+        tx.pure.string(resource.path), // Resource path
+        tx.pure.string(resource.blob_id), // New blob ID
         tx.pure.vector(
           'u8',
           Array.from(Buffer.from(resource.blob_hash, 'hex')),
@@ -242,19 +270,25 @@ export function format_sites_table(sites, network) {
 
 /**
  * Build a transaction that deletes a Site object
- * Note: Site must have resource_count == 0 (all resources deleted first)
- * @param {string} site_id - Site object ID to delete
+ * Note: Site's Table must be empty (all resources deleted first)
+ * @param {string} admin_cap_id - AdminCap object ID (will be consumed)
+ * @param {string} site_id - Shared Site object ID to delete
  * @param {string} sender - Sender address
  * @param {Object} client - Sui client
  * @returns {Promise<TransactionResult>} Transaction bytes
  */
-export async function build_delete_transaction(site_id, sender, client) {
+export async function build_delete_transaction(
+  admin_cap_id,
+  site_id,
+  sender,
+  client,
+) {
   const tx = new Transaction()
 
-  // Call delete_site
+  // Call delete_site (consumes AdminCap and Site)
   tx.moveCall({
     target: `${PACKAGE_ID}::site::delete_site`,
-    arguments: [tx.object(site_id)],
+    arguments: [tx.object(admin_cap_id), tx.object(site_id)],
   })
 
   // Set sender
