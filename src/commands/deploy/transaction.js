@@ -46,6 +46,7 @@ export function create_site_transaction({ package_id, wallet, site_name }) {
  * @param {string} params.wallet - Wallet address
  * @param {string} params.admin_cap_id - AdminCap object ID from step 1
  * @param {string} params.site_id - Shared Site object ID from step 1
+ * @param {string} params.site_version - Site object version from step 1
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.quilt_patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
  * @returns {Transaction} Configured transaction object
@@ -55,6 +56,7 @@ export function add_resources_transaction({
   wallet,
   admin_cap_id,
   site_id,
+  site_version,
   quilt_patches,
   file_metadata,
 }) {
@@ -74,7 +76,11 @@ export function add_resources_transaction({
       target: `${package_id}::site::add_resource`,
       arguments: [
         tx.object(admin_cap_id), // AdminCap reference (owned object)
-        tx.object(site_id), // Shared Site reference (SDK auto-detects shared vs owned)
+        tx.sharedObjectRef({
+          objectId: site_id,
+          initialSharedVersion: site_version,
+          mutable: true,
+        }), // Shared Site reference (mutable shared object)
         tx.pure.string(full_path),
         tx.pure.string(patch.quiltPatchId),
         tx.pure.vector('u8', Array.from(fromBase64(info.hash))),

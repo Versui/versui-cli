@@ -8,8 +8,8 @@ describe('build_delete_transaction', () => {
     assert.equal(typeof build_delete_transaction, 'function')
   })
 
-  it('should accept admin_cap_id, site_id, sender, and client parameters', () => {
-    // Verify function signature (4 parameters)
-    assert.equal(build_delete_transaction.length, 4)
+  it('should accept admin_cap_id, site_id, site_version, sender, and client parameters', () => {
+    // Verify function signature (5 parameters)
+    assert.equal(build_delete_transaction.length, 5)
   })
 })

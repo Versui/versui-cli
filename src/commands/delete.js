@@ -86,11 +86,28 @@ export async function delete_site(site_id, options = {}) {
     }
     spinner.succeed('AdminCap found')
 
+    // Query Site object to get current version
+    spinner.start('Querying Site object...')
+    const site_obj = await client.getObject({
+      id: site_id,
+      options: {
+        showContent: true,
+      },
+    })
+
+    if (!site_obj?.data?.version) {
+      throw new Error(`Failed to query Site object version for ${site_id}`)
+    }
+
+    const site_version = site_obj.data.version
+    spinner.succeed('Site object queried')
+
     // Build delete transaction
     spinner.start('Building delete transaction...')
     const { tx_bytes_base64 } = await build_delete_transaction(
       admin_cap_id,
       site_id,
+      site_version,
       address,
       client,
     )

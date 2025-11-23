@@ -555,14 +555,22 @@ export async function deploy(dir, options = {}) {
       throw new Error(`Transaction failed: ${err.stderr || err.message}`)
     }
 
-    const site_id = extract_site_id(tx1_result)
-    const admin_cap_id = extract_admin_cap_id(tx1_result)
+    const site_obj = tx1_result?.objectChanges?.find(
+      c => c.type === 'created' && c.objectType?.includes('::site::Site'),
+    )
+    const admin_cap_obj = tx1_result?.objectChanges?.find(
+      c => c.type === 'created' && c.objectType?.includes('::SiteAdminCap'),
+    )
 
-    if (site_id === 'unknown' || admin_cap_id === 'unknown') {
+    if (!site_obj?.objectId || !admin_cap_obj?.objectId) {
       throw new Error(
         'Failed to extract Site ID or AdminCap ID from transaction',
       )
     }
+
+    const site_id = site_obj.objectId
+    const admin_cap_id = admin_cap_obj.objectId
+    const site_version = site_obj.version || site_obj.digest || '1' // Initial version for newly created object
 
     state.site_id = site_id
 
@@ -575,6 +583,7 @@ export async function deploy(dir, options = {}) {
       wallet: state.wallet,
       admin_cap_id,
       site_id,
+      site_version,
       quilt_patches,
       file_metadata,
     })
