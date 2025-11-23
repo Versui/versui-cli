@@ -73,8 +73,8 @@ export function add_resources_transaction({
     tx.moveCall({
       target: `${package_id}::site::add_resource`,
       arguments: [
-        tx.object(admin_cap_id), // AdminCap reference
-        tx.object(site_id), // Shared Site reference
+        tx.object(admin_cap_id), // AdminCap reference (owned object)
+        tx.object(site_id), // Shared Site reference (SDK auto-detects shared vs owned)
         tx.pure.string(full_path),
         tx.pure.string(patch.quiltPatchId),
         tx.pure.vector('u8', Array.from(fromBase64(info.hash))),

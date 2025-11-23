@@ -76,8 +76,8 @@ export async function build_add_resources_transaction(
     tx.moveCall({
       target: `${PACKAGE_ID}::site::add_resource`,
       arguments: [
-        tx.object(admin_cap_id), // AdminCap reference
-        tx.object(site_id), // Shared Site reference
+        tx.object(admin_cap_id), // AdminCap reference (owned object)
+        tx.object(site_id), // Shared Site reference (SDK auto-detects shared vs owned)
         tx.pure.string(resource.path),
         tx.pure.string(resource.blob_id),
         tx.pure.vector(
@@ -125,8 +125,8 @@ export async function build_update_transaction(
     tx.moveCall({
       target: `${PACKAGE_ID}::site::update_resource`,
       arguments: [
-        tx.object(admin_cap_id), // AdminCap reference
-        tx.object(site_id), // Shared Site reference
+        tx.object(admin_cap_id), // AdminCap reference (owned object)
+        tx.object(site_id), // Shared Site reference (SDK auto-detects shared vs owned)
         tx.pure.string(resource.path), // Resource path
         tx.pure.string(resource.blob_id), // New blob ID
         tx.pure.vector(
@@ -288,7 +288,10 @@ export async function build_delete_transaction(
   // Call delete_site (consumes AdminCap and Site)
   tx.moveCall({
     target: `${PACKAGE_ID}::site::delete_site`,
-    arguments: [tx.object(admin_cap_id), tx.object(site_id)],
+    arguments: [
+      tx.object(admin_cap_id), // AdminCap reference (consumed)
+      tx.object(site_id), // Shared Site reference (consumed, SDK auto-detects)
+    ],
   })
 
   // Set sender
