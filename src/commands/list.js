@@ -46,8 +46,9 @@ export async function list(options = {}) {
     const sites = []
     for (const item of admin_caps.data) {
       if (!item.data?.content) continue
-      const content = /** @type {any} */ (item.data.content)
-      const { site_id } = content.fields
+      const {
+        fields: { site_id },
+      } = /** @type {any} */ (item.data.content)
 
       // Fetch the Site object
       const site_obj = await client.getObject({
@@ -58,7 +59,7 @@ export async function list(options = {}) {
       })
 
       if (!site_obj?.data?.content) continue
-      const site_fields = /** @type {any} */ (site_obj.data.content).fields
+      const { fields: site_fields } = /** @type {any} */ (site_obj.data.content)
 
       // Extract resources Table ID and query resource count
       const resources_table_id = site_fields.resources?.fields?.id?.id

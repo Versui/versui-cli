@@ -70,13 +70,13 @@ versui deploy <directory>
 
 **Options:**
 
-| Flag               | Description                    | Default   |
-| ------------------ | ------------------------------ | --------- |
-| `-e, --epochs <n>` | Storage duration in epochs     | `1`       |
-| `--network <net>`  | Sui network (testnet, mainnet) | `testnet` |
-| `-n, --name <name>`| Site name (metadata)           | From package.json |
-| `-y, --yes`        | Skip confirmations (for CI)    | `false`   |
-| `--json`           | Output JSON only (for scripts) | `false`   |
+| Flag                | Description                    | Default           |
+| ------------------- | ------------------------------ | ----------------- |
+| `-e, --epochs <n>`  | Storage duration in epochs     | `1`               |
+| `--network <net>`   | Sui network (testnet, mainnet) | `testnet`         |
+| `-n, --name <name>` | Site name (metadata)           | From package.json |
+| `-y, --yes`         | Skip confirmations (for CI)    | `false`           |
+| `--json`            | Output JSON only (for scripts) | `false`           |
 
 **Examples:**
 
