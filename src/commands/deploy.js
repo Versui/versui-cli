@@ -32,8 +32,6 @@ import {
   build_identifier_map,
   create_site_transaction,
   add_resources_transaction,
-  extract_site_id,
-  extract_admin_cap_id,
 } from './deploy/transaction.js'
 import { get_epoch_info_with_fallback } from './deploy/walrus-info.js'
 
