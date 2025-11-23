@@ -28,15 +28,50 @@ export async function list(options = {}) {
       url: getFullnodeUrl(/** @type {any} */ (network)),
     })
 
-    // Query sites
+    // Query sites via AdminCaps (Sites are shared objects, can't use getOwnedObjects)
     const spinner = ora(`Fetching deployments from ${network}...`).start()
 
-    const site_type = `${PACKAGE_ID}::site::Site`
-    const sites = await query_owned_sites(address, site_type, client)
+    const admin_cap_type = `${PACKAGE_ID}::site::SiteAdminCap`
+    const admin_caps = await client.getOwnedObjects({
+      owner: address,
+      filter: {
+        StructType: admin_cap_type,
+      },
+      options: {
+        showContent: true,
+      },
+    })
 
-    // Set network for each site
-    for (const site of sites) {
-      site.network = network
+    // Extract site IDs from AdminCaps and fetch Site objects
+    const sites = []
+    for (const item of admin_caps.data) {
+      if (!item.data?.content) continue
+      const { fields } = /** @type {any} */ (item.data.content)
+      const site_id = fields.site_id
+
+      // Fetch the Site object
+      const site_obj = await client.getObject({
+        id: site_id,
+        options: {
+          showContent: true,
+        },
+      })
+
+      if (!site_obj?.data?.content) continue
+      const site_fields = /** @type {any} */ (site_obj.data.content).fields
+
+      // Query resource count (dynamic fields)
+      const resources_response = await client.getDynamicFields({
+        parentId: site_id,
+      })
+
+      sites.push({
+        object_id: site_id,
+        name: site_fields.name || 'Unnamed',
+        files_count: resources_response.data.length,
+        total_size: 0, // TODO: Calculate from resources
+        network,
+      })
     }
 
     spinner.stop()
