@@ -6,7 +6,7 @@ import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
 
-const execAsync = promisify(exec)
+const exec_async = promisify(exec)
 
 /**
  * Delete one or more site deployments
@@ -136,7 +136,6 @@ export async function delete_site(site_ids, options = {}) {
         continue
       }
 
-      const site_version = String(initial_shared_version)
       site_spinner.succeed('Site object queried')
 
       // Extract resources Table ID from Site object

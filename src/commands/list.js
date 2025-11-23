@@ -4,7 +4,7 @@ import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import chalk from 'chalk'
 import ora from 'ora'
 
-import { query_owned_sites, format_sites_table } from '../lib/sui.js'
+import { format_sites_table } from '../lib/sui.js'
 
 const PACKAGE_ID =
   '0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d'
@@ -46,8 +46,8 @@ export async function list(options = {}) {
     const sites = []
     for (const item of admin_caps.data) {
       if (!item.data?.content) continue
-      const { fields } = /** @type {any} */ (item.data.content)
-      const site_id = fields.site_id
+      const content = /** @type {any} */ (item.data.content)
+      const { site_id } = content.fields
 
       // Fetch the Site object
       const site_obj = await client.getObject({
