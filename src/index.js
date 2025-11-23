@@ -57,8 +57,8 @@ program
 
 program
   .command('delete')
-  .description('Delete a site deployment')
-  .argument('<site-id>', 'site object ID to delete')
+  .description('Delete one or more site deployments')
+  .argument('<site-ids...>', 'site object ID(s) to delete')
   .option('-y, --yes', 'skip confirmation prompt')
   .option('--network <network>', 'sui network (testnet, mainnet)')
   .action(delete_site)
