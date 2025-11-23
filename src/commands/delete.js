@@ -1,14 +1,9 @@
 import { execSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
-
-import { build_delete_transaction } from '../lib/sui.js'
 
 /**
  * Delete a site deployment
@@ -110,42 +105,53 @@ export async function delete_site(site_id, options = {}) {
     const site_version = String(initial_shared_version)
     spinner.succeed('Site object queried')
 
-    // Build delete transaction
-    spinner.start('Building delete transaction...')
-    const { tx_bytes_base64 } = await build_delete_transaction(
-      admin_cap_id,
-      site_id,
-      site_version,
-      address,
-      client,
-    )
-    spinner.succeed('Transaction built')
+    // Extract resources Table ID from Site object
+    const site_fields = /** @type {any} */ (site_obj.data.content).fields
+    const resources_table_id = site_fields.resources?.fields?.id?.id
 
-    // Sign transaction
-    spinner.start('Signing transaction...')
-    const tx_file = join(tmpdir(), `versui-delete-${Date.now()}.txt`)
-    writeFileSync(tx_file, tx_bytes_base64)
-
-    const sign_output = execSync(
-      `sui keytool sign --address ${address} --data ${tx_file}`,
-      { encoding: 'utf-8' },
-    )
-
-    const signature_match = sign_output.match(
-      /Serialized signature[^:]*:\s*([A-Za-z0-9+/=]+)/,
-    )
-    if (!signature_match) {
-      throw new Error('Failed to extract signature from sui keytool output')
+    if (!resources_table_id) {
+      throw new Error('Failed to extract resources Table ID from Site object')
     }
-    const [, signature] = signature_match
-    spinner.succeed('Transaction signed')
 
-    // Execute transaction
+    // Query resources (dynamic fields of the Table)
+    spinner.start('Checking site resources...')
+    const resources_response = await client.getDynamicFields({
+      parentId: resources_table_id,
+    })
+    const resource_count = resources_response.data.length
+    spinner.succeed(`Found ${resource_count} resource(s)`)
+
+    // If site has resources, delete them first
+    if (resource_count > 0) {
+      // Delete each resource
+      for (let i = 0; i < resources_response.data.length; i++) {
+        const resource = resources_response.data[i]
+        const path = resource.name.value
+        spinner.start(
+          `Deleting resource ${i + 1}/${resource_count}: ${path}...`,
+        )
+
+        const delete_cmd = `sui client call --package 0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d --module site --function delete_resource --args ${admin_cap_id} ${site_id} '${path}' --gas-budget 10000000`
+
+        const resources_exec_output = execSync(delete_cmd, {
+          encoding: 'utf-8',
+        })
+
+        if (!resources_exec_output.includes('Status: Success')) {
+          throw new Error(`Failed to delete resource: ${path}`)
+        }
+
+        spinner.succeed(
+          `Deleted resource ${i + 1}/${resource_count}: ${path}`,
+        )
+      }
+    }
+
+    // Delete site using sui client call
     spinner.start('Deleting site on Sui blockchain...')
-    const exec_output = execSync(
-      `sui client execute-signed-tx --tx-bytes ${tx_bytes_base64} --signature ${signature}`,
-      { encoding: 'utf-8' },
-    )
+    const delete_site_cmd = `sui client call --package 0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d --module site --function delete_site --args ${admin_cap_id} ${site_id} --gas-budget 10000000`
+
+    const exec_output = execSync(delete_site_cmd, { encoding: 'utf-8' })
 
     // Check for success
     if (exec_output.includes('Status: Success')) {

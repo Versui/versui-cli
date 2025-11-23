@@ -281,6 +281,58 @@ export function format_sites_table(sites, network) {
 }
 
 /**
+ * Build delete resources transaction
+ * @param {string} admin_cap_id - AdminCap object ID
+ * @param {string} site_id - Site object ID
+ * @param {string} site_version - Initial shared version
+ * @param {Array<{type: string, value: any}>} resource_names - Array of resource path names from dynamic fields
+ * @param {string} sender - Sender address
+ * @param {Object} client - Sui client
+ * @returns {Promise<TransactionResult>} Transaction bytes
+ */
+export async function build_delete_resources_transaction(
+  admin_cap_id,
+  site_id,
+  site_version,
+  resource_names,
+  sender,
+  client,
+) {
+  const tx = new Transaction()
+
+  // Delete each resource
+  for (const name_obj of resource_names) {
+    // Extract the path string from the dynamic field name object
+    // name_obj structure: { type: "0x1::string::String", value: "/index.html" }
+    const path = name_obj.value || String(name_obj)
+
+    tx.moveCall({
+      target: `${PACKAGE_ID}::site::delete_resource`,
+      arguments: [
+        tx.object(admin_cap_id), // AdminCap reference
+        tx.sharedObjectRef({
+          objectId: site_id,
+          initialSharedVersion: site_version,
+          mutable: true,
+        }), // Shared Site reference (mutable)
+        tx.pure.string(path), // Resource path
+      ],
+    })
+  }
+
+  // Set sender
+  tx.setSender(sender)
+
+  // Build transaction bytes
+  const tx_bytes = await tx.build({ client })
+
+  return {
+    tx_bytes,
+    tx_bytes_base64: Buffer.from(tx_bytes).toString('base64'),
+  }
+}
+
+/**
  * Build a transaction that deletes a Site object
  * Note: Site's Table must be empty (all resources deleted first)
  * @param {string} admin_cap_id - AdminCap object ID (will be consumed)

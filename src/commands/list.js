@@ -60,15 +60,21 @@ export async function list(options = {}) {
       if (!site_obj?.data?.content) continue
       const site_fields = /** @type {any} */ (site_obj.data.content).fields
 
-      // Query resource count (dynamic fields)
-      const resources_response = await client.getDynamicFields({
-        parentId: site_id,
-      })
+      // Extract resources Table ID and query resource count
+      const resources_table_id = site_fields.resources?.fields?.id?.id
+      let files_count = 0
+
+      if (resources_table_id) {
+        const resources_response = await client.getDynamicFields({
+          parentId: resources_table_id,
+        })
+        files_count = resources_response.data.length
+      }
 
       sites.push({
         object_id: site_id,
         name: site_fields.name || 'Unnamed',
-        files_count: resources_response.data.length,
+        files_count,
         total_size: 0, // TODO: Calculate from resources
         network,
       })
