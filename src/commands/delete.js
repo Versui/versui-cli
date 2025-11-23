@@ -86,20 +86,28 @@ export async function delete_site(site_id, options = {}) {
     }
     spinner.succeed('AdminCap found')
 
-    // Query Site object to get current version
+    // Query Site object to get initial shared version
     spinner.start('Querying Site object...')
     const site_obj = await client.getObject({
       id: site_id,
       options: {
         showContent: true,
+        showOwner: true,
       },
     })
 
-    if (!site_obj?.data?.version) {
-      throw new Error(`Failed to query Site object version for ${site_id}`)
+    if (!site_obj?.data) {
+      throw new Error(`Failed to query Site object ${site_id}`)
     }
 
-    const site_version = site_obj.data.version
+    // Extract initial_shared_version from owner field
+    const initial_shared_version =
+      site_obj.data.owner?.Shared?.initial_shared_version
+    if (!initial_shared_version) {
+      throw new Error(`Site ${site_id} is not a shared object`)
+    }
+
+    const site_version = String(initial_shared_version)
     spinner.succeed('Site object queried')
 
     // Build delete transaction
