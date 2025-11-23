@@ -17,46 +17,64 @@ export function build_identifier_map(file_metadata) {
 }
 
 /**
- * Creates Sui transaction for site deployment
+ * Creates Sui transaction for site creation (step 1 of 2)
+ * Returns AdminCap to wallet, creates shared Site object
  * @param {object} params - Transaction parameters
  * @param {string} params.package_id - Versui package ID
  * @param {string} params.wallet - Wallet address
  * @param {string} params.site_name - Site name
+ * @returns {Transaction} Configured transaction object
+ */
+export function create_site_transaction({ package_id, wallet, site_name }) {
+  const tx = new Transaction()
+  tx.setSender(wallet)
+
+  // create_site entry function (returns AdminCap to sender, shares Site)
+  tx.moveCall({
+    target: `${package_id}::site::create_site`,
+    arguments: [tx.pure.string(site_name)],
+  })
+
+  return tx
+}
+
+/**
+ * Creates Sui transaction for adding resources to site (step 2 of 2)
+ * Requires AdminCap and shared Site ID from step 1
+ * @param {object} params - Transaction parameters
+ * @param {string} params.package_id - Versui package ID
+ * @param {string} params.wallet - Wallet address
+ * @param {string} params.admin_cap_id - AdminCap object ID from step 1
+ * @param {string} params.site_id - Shared Site object ID from step 1
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.quilt_patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
  * @returns {Transaction} Configured transaction object
  */
-export function create_site_transaction({
+export function add_resources_transaction({
   package_id,
   wallet,
-  site_name,
+  admin_cap_id,
+  site_id,
   quilt_patches,
   file_metadata,
 }) {
   const tx = new Transaction()
   tx.setSender(wallet)
 
-  // Use non-entry functions (new + add_resource) instead of entry functions
-  // This allows us to keep the Site object in the transaction for multiple calls
-  const [site] = tx.moveCall({
-    target: `${package_id}::site::new`,
-    arguments: [tx.pure.string(site_name)],
-  })
-
   // Build identifier -> full path mapping (walrus flattens paths)
   const identifier_to_path = build_identifier_map(file_metadata)
 
-  const resources = []
   for (const patch of quilt_patches) {
     const full_path =
       identifier_to_path[patch.identifier] || '/' + patch.identifier
     const info = file_metadata[full_path]
     if (!info) continue
 
-    const [resource] = tx.moveCall({
+    tx.moveCall({
       target: `${package_id}::site::add_resource`,
       arguments: [
-        site,
+        tx.object(admin_cap_id), // AdminCap reference
+        tx.object(site_id), // Shared Site reference
         tx.pure.string(full_path),
         tx.pure.string(patch.quiltPatchId),
         tx.pure.vector('u8', Array.from(fromBase64(info.hash))),
@@ -64,11 +82,7 @@ export function create_site_transaction({
         tx.pure.u64(info.size),
       ],
     })
-    resources.push(resource)
   }
-
-  // Transfer Site + all Resources to wallet
-  tx.transferObjects([site, ...resources], wallet)
 
   return tx
 }
@@ -82,6 +96,19 @@ export function extract_site_id(tx_result) {
   return (
     tx_result?.objectChanges?.find(
       c => c.type === 'created' && c.objectType?.includes('::site::Site'),
+    )?.objectId || 'unknown'
+  )
+}
+
+/**
+ * Extracts AdminCap ID from transaction result
+ * @param {object} tx_result - Transaction result from Sui
+ * @returns {string} AdminCap object ID or 'unknown'
+ */
+export function extract_admin_cap_id(tx_result) {
+  return (
+    tx_result?.objectChanges?.find(
+      c => c.type === 'created' && c.objectType?.includes('::SiteAdminCap'),
     )?.objectId || 'unknown'
   )
 }

@@ -31,7 +31,9 @@ import { format_bytes, format_wallet_address } from './deploy/formatting.js'
 import {
   build_identifier_map,
   create_site_transaction,
+  add_resources_transaction,
   extract_site_id,
+  extract_admin_cap_id,
 } from './deploy/transaction.js'
 import { get_epoch_info_with_fallback } from './deploy/walrus-info.js'
 
@@ -487,9 +489,9 @@ export async function deploy(dir, options = {}) {
     state.upload_progress = 0
     update_display()
 
-    // Build transaction
+    // === TRANSACTION 1: Create Site ===
     state.step = 'sui'
-    state.spinner_text = 'Building transaction...'
+    state.spinner_text = 'Building create site transaction...'
     update_display()
 
     const rpc_url = getFullnodeUrl(
@@ -502,18 +504,16 @@ export async function deploy(dir, options = {}) {
       throw new Error(`Versui package not deployed on ${network} yet`)
     }
 
-    const tx = create_site_transaction({
+    const tx1 = create_site_transaction({
       package_id,
       wallet: state.wallet,
       site_name,
-      quilt_patches,
-      file_metadata,
     })
 
-    const tx_bytes = await tx.build({ client: sui_client })
-    const tx_base64 = toBase64(tx_bytes)
+    const tx1_bytes = await tx1.build({ client: sui_client })
+    const tx1_base64 = toBase64(tx1_bytes)
 
-    state.sui_cost = await get_sui_gas_estimate(tx_base64, sui_client)
+    state.sui_cost = await get_sui_gas_estimate(tx1_base64, sui_client)
     state.spinner_text = null
     update_display()
 
@@ -521,8 +521,8 @@ export async function deploy(dir, options = {}) {
     await confirm_action(
       'Create Site on Sui',
       [
-        'Creates a Site object you own',
-        `References ${quilt_patches.length} resources on Walrus`,
+        'Creates a Site object (shared)',
+        'Returns AdminCap to your wallet',
         'Your wallet pays SUI gas fees.',
       ],
       'Estimated gas',
@@ -530,17 +530,17 @@ export async function deploy(dir, options = {}) {
       auto_yes,
     )
 
-    state.spinner_text = 'Executing transaction...'
+    state.spinner_text = 'Creating site...'
     update_display()
 
-    // Execute transaction
-    let tx_result
+    // Execute transaction 1
+    let tx1_result
     try {
-      const output = execSync(`sui client serialized-tx ${tx_base64} --json`, {
+      const output = execSync(`sui client serialized-tx ${tx1_base64} --json`, {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
       })
-      tx_result = JSON.parse(output)
+      tx1_result = JSON.parse(output)
     } catch (err) {
       // Log orphaned blob for reference (walrus upload succeeded but sui tx failed)
       if (state.blob_id) {
@@ -555,7 +555,60 @@ export async function deploy(dir, options = {}) {
       throw new Error(`Transaction failed: ${err.stderr || err.message}`)
     }
 
-    state.site_id = extract_site_id(tx_result)
+    const site_id = extract_site_id(tx1_result)
+    const admin_cap_id = extract_admin_cap_id(tx1_result)
+
+    if (site_id === 'unknown' || admin_cap_id === 'unknown') {
+      throw new Error(
+        'Failed to extract Site ID or AdminCap ID from transaction',
+      )
+    }
+
+    state.site_id = site_id
+
+    // === TRANSACTION 2: Add Resources ===
+    state.spinner_text = 'Building add resources transaction...'
+    update_display()
+
+    const tx2 = add_resources_transaction({
+      package_id,
+      wallet: state.wallet,
+      admin_cap_id,
+      site_id,
+      quilt_patches,
+      file_metadata,
+    })
+
+    const tx2_bytes = await tx2.build({ client: sui_client })
+    const tx2_base64 = toBase64(tx2_bytes)
+
+    const tx2_gas_cost = await get_sui_gas_estimate(tx2_base64, sui_client)
+
+    // Confirm second transaction
+    await confirm_action(
+      'Add Resources to Site',
+      [
+        `Adds ${quilt_patches.length} resources to your site`,
+        'References Walrus blob storage',
+        'Your wallet pays SUI gas fees.',
+      ],
+      'Estimated gas',
+      tx2_gas_cost ? `~${tx2_gas_cost.toFixed(6)} SUI` : '~0.01 SUI',
+      auto_yes,
+    )
+
+    state.spinner_text = 'Adding resources...'
+    update_display()
+
+    // Execute transaction 2
+    try {
+      execSync(`sui client serialized-tx ${tx2_base64} --json`, {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+    } catch (err) {
+      throw new Error(`Transaction failed: ${err.stderr || err.message}`)
+    }
 
     // Detect service worker in build (skip if --custom-sw flag)
     let sw_detection
