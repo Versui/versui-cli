@@ -1,9 +1,12 @@
-import { execSync } from 'node:child_process'
+import { execSync, exec } from 'node:child_process'
+import { promisify } from 'node:util'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
+
+const execAsync = promisify(exec)
 
 /**
  * Delete one or more site deployments
@@ -168,12 +171,20 @@ export async function delete_site(site_ids, options = {}) {
 
           const delete_cmd = `sui client call --package 0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d --module site --function delete_resource --args ${admin_cap_id} ${site_id} '${path}' --gas-budget 10000000`
 
-          const resources_exec_output = execSync(delete_cmd, {
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-          })
+          try {
+            const { stdout: resources_exec_output } = await execAsync(
+              delete_cmd,
+              {
+                encoding: 'utf-8',
+              },
+            )
 
-          if (!resources_exec_output.includes('Status: Success')) {
+            if (!resources_exec_output.includes('Status: Success')) {
+              del_spinner.fail(`Failed to delete resource: ${path}`)
+              console.log('')
+              continue
+            }
+          } catch (error) {
             del_spinner.fail(`Failed to delete resource: ${path}`)
             console.log('')
             continue
@@ -187,17 +198,22 @@ export async function delete_site(site_ids, options = {}) {
       const delete_spinner = ora('Deleting site...').start()
       const delete_site_cmd = `sui client call --package 0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d --module site --function delete_site --args ${admin_cap_id} ${site_id} --gas-budget 10000000`
 
-      const exec_output = execSync(delete_site_cmd, {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
+      try {
+        const { stdout: exec_output } = await execAsync(delete_site_cmd, {
+          encoding: 'utf-8',
+        })
 
-      // Check for success
-      if (exec_output.includes('Status: Success')) {
-        delete_spinner.succeed(
-          chalk.green(`✓ Deleted: ${site_id.slice(0, 10)}...`),
-        )
-      } else {
+        // Check for success
+        if (exec_output.includes('Status: Success')) {
+          delete_spinner.succeed(
+            chalk.green(`✓ Deleted: ${site_id.slice(0, 10)}...`),
+          )
+        } else {
+          delete_spinner.fail(
+            chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`),
+          )
+        }
+      } catch (error) {
         delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
       }
 
