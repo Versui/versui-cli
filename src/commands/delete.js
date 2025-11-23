@@ -6,7 +6,8 @@ import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
 
-const exec_async = promisify(exec)
+// eslint-disable-next-line @typescript-eslint/naming-convention
+const execAsync = promisify(exec)
 
 /**
  * Delete one or more site deployments
@@ -128,8 +129,8 @@ export async function delete_site(site_ids, options = {}) {
       }
 
       // Extract initial_shared_version from owner field
-      const initial_shared_version =
-        site_obj.data.owner?.Shared?.initial_shared_version
+      const initial_shared_version = /** @type {any} */ (site_obj.data.owner)
+        ?.Shared?.initial_shared_version
       if (!initial_shared_version) {
         site_spinner.fail('Site is not a shared object')
         console.log('')
@@ -208,9 +209,7 @@ export async function delete_site(site_ids, options = {}) {
             chalk.green(`✓ Deleted: ${site_id.slice(0, 10)}...`),
           )
         } else {
-          delete_spinner.fail(
-            chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`),
-          )
+          delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
         }
       } catch (error) {
         delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
