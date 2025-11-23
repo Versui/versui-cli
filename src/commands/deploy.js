@@ -332,11 +332,26 @@ export async function deploy(dir, options = {}) {
   }
 
   // Resolve site name with priority cascade
-  const site_name = get_site_name({
+  let site_name = get_site_name({
     cli_name: cli_site_name,
     versui_config,
     package_json,
   })
+
+  // If no name found and interactive mode, prompt for it
+  if (site_name === 'Versui Site' && !auto_yes) {
+    console.log('')
+    const response = await prompts({
+      type: 'text',
+      name: 'site_name',
+      message: 'Site name:',
+      initial: 'Versui Site',
+    })
+
+    if (response.site_name && response.site_name.trim()) {
+      site_name = response.site_name.trim()
+    }
+  }
 
   // Show header once
   console.log('')
