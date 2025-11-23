@@ -44,6 +44,24 @@ npm install -g @versui/cli
 
 ## Usage
 
+### Manage Sui Accounts
+
+VersUI uses your Sui CLI wallet. Switch accounts before deploying:
+
+```bash
+# List available addresses
+sui client addresses
+
+# Switch active address
+sui client switch --address 0xYOUR_ADDRESS
+
+# Or create new address
+sui client new-address ed25519
+
+# Check current active address
+sui client active-address
+```
+
 ### Deploy a static site
 
 ```bash
@@ -56,6 +74,7 @@ versui deploy <directory>
 | ------------------ | ------------------------------ | --------- |
 | `-e, --epochs <n>` | Storage duration in epochs     | `1`       |
 | `--network <net>`  | Sui network (testnet, mainnet) | `testnet` |
+| `-n, --name <name>`| Site name (metadata)           | From package.json |
 | `-y, --yes`        | Skip confirmations (for CI)    | `false`   |
 | `--json`           | Output JSON only (for scripts) | `false`   |
 
@@ -64,6 +83,9 @@ versui deploy <directory>
 ```bash
 # Interactive deploy
 versui deploy ./dist
+
+# Deploy with specific name
+versui deploy ./dist --name "My Portfolio"
 
 # CI/CD deploy (no prompts)
 versui deploy ./dist -y --network testnet -e 5
@@ -75,8 +97,27 @@ versui deploy ./dist --json
 ### List deployments
 
 ```bash
+# List all sites deployed by active address
 versui list
+
+# List sites on specific network
+versui list --network mainnet
 ```
+
+### Delete deployments
+
+```bash
+# Delete single site
+versui delete <site-id>
+
+# Delete multiple sites at once
+versui delete <site-id-1> <site-id-2> <site-id-3>
+
+# Skip confirmation prompt
+versui delete <site-id> --yes
+```
+
+**Note:** Sites with resources are automatically cleaned up - resources are deleted first, then the site itself.
 
 ---
 
