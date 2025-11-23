@@ -323,7 +323,7 @@ export async function deploy(dir, options = {}) {
   const package_json_path = join(project_dir, 'package.json')
   if (existsSync(package_json_path)) {
     try {
-      package_json = JSON.parse(read_file(package_json_path))
+      package_json = JSON.parse(read_file(package_json_path).toString())
     } catch {
       // Ignore invalid package.json
     }
@@ -598,6 +598,7 @@ export async function deploy(dir, options = {}) {
       if (!index_patch) throw new Error('No index.html found')
 
       const identifier_to_path = build_identifier_map(file_metadata)
+      /** @type {Object<string, string>} */
       const resource_map = {}
       for (const patch of quilt_patches) {
         const full_path =
@@ -711,7 +712,7 @@ async function deploy_json(dir, options) {
   const package_json_path = join(project_dir, 'package.json')
   if (existsSync(package_json_path)) {
     try {
-      package_json = JSON.parse(read_file(package_json_path))
+      package_json = JSON.parse(read_file(package_json_path).toString())
     } catch {
       // Ignore invalid package.json
     }

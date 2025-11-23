@@ -65,6 +65,7 @@ export async function regenerate(site_id, options = {}) {
       : []
 
   // Build resource map
+  /** @type {Object<string, string>} */
   const resource_map = {}
   for (const res of resource_objects) {
     if (!res.data) continue
