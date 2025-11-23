@@ -21,7 +21,7 @@ import Table from 'cli-table3'
 // Versui package ID on testnet (env var can override for different networks)
 const PACKAGE_ID =
   process.env.VERSUI_PACKAGE_ID ||
-  '0xda3719ae702534b4181c5f2ddf2780744ee512dae7a5b22bce6b5fda4893471b'
+  '0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d'
 
 /**
  * Build a transaction that creates a Site and all Resources
