@@ -800,6 +800,7 @@ async function deploy_json(dir, options) {
 
   const file_paths = scan_directory(dir, dir)
   const file_metadata = {}
+  const blobs_args = []
   for (const fp of file_paths) {
     const rel = '/' + relative(dir, fp).replace(/\\/g, '/')
     const content = read_file(fp)
@@ -808,10 +809,13 @@ async function deploy_json(dir, options) {
       size: statSync(fp).size,
       content_type: get_content_type(fp),
     }
+    // Build --blobs args with JSON format: {"path":"...", "identifier":"..."}
+    const blob_spec = JSON.stringify({ path: fp, identifier: rel })
+    blobs_args.push(`'${blob_spec}'`)
   }
 
   const walrus_output = execSync(
-    `walrus store-quilt --paths "${dir}" --epochs ${epochs} --json`,
+    `walrus store-quilt --blobs ${blobs_args.join(' ')} --epochs ${epochs} --json`,
     {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -869,11 +873,10 @@ async function deploy_json(dir, options) {
   const admin_cap_id = admin_cap_obj.objectId
 
   // === TRANSACTION 2: Add Resources ===
-  // Build identifier -> full path mapping (walrus flattens paths)
+  // Build identifier -> full path mapping (with --blobs, identifier = full path)
   const identifier_to_path = {}
   for (const rel_path of Object.keys(file_metadata)) {
-    const filename = rel_path.split('/').pop()
-    identifier_to_path[filename] = rel_path
+    identifier_to_path[rel_path] = rel_path
   }
 
   const tx2 = new Transaction()
@@ -937,9 +940,18 @@ async function upload_to_walrus_with_progress(
   spawn_fn = spawn,
 ) {
   return new Promise((resolve, reject) => {
+    // Scan files and build --blobs args with JSON format
+    const file_paths = scan_directory(dir, dir)
+    const blobs_args = ['--blobs']
+    for (const fp of file_paths) {
+      const rel = '/' + relative(dir, fp).replace(/\\/g, '/')
+      const blob_spec = JSON.stringify({ path: fp, identifier: rel })
+      blobs_args.push(blob_spec)
+    }
+
     const child = spawn_fn(
       'walrus',
-      ['store-quilt', '--paths', dir, '--epochs', String(epochs), '--json'],
+      ['store-quilt', ...blobs_args, '--epochs', String(epochs), '--json'],
       {
         stdio: ['pipe', 'pipe', 'pipe'],
       },

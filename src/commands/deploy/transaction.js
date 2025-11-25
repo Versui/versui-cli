@@ -3,15 +3,15 @@ import { fromBase64 } from '@mysten/sui/utils'
 
 /**
  * Builds identifier -> full path mapping from file metadata
+ * With --blobs JSON format, identifier equals the full relative path
  * @param {Record<string, any>} file_metadata - File metadata map
- * @returns {Record<string, string>} Map of filename to full path
+ * @returns {Record<string, string>} Map of relative path to full path
  */
 export function build_identifier_map(file_metadata) {
   /** @type {Record<string, string>} */
   const identifier_to_path = {}
   for (const rel_path of Object.keys(file_metadata)) {
-    const filename = rel_path.split('/').pop()
-    identifier_to_path[filename] = rel_path
+    identifier_to_path[rel_path] = rel_path
   }
   return identifier_to_path
 }
