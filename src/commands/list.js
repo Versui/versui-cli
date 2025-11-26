@@ -23,13 +23,22 @@ export async function list(options = {}) {
     // Get wallet address
     const address = get_active_address()
 
+    // Display network and address header first
+    console.log('')
+    console.log(chalk.dim('  Network: ') + chalk.cyan(network))
+    console.log(chalk.dim('  Address: ') + chalk.cyan(address))
+    console.log('')
+
     // Create Sui client
     const client = new SuiClient({
       url: getFullnodeUrl(/** @type {any} */ (network)),
     })
 
     // Query sites via AdminCaps (Sites are shared objects, can't use getOwnedObjects)
-    const spinner = ora(`Fetching deployments from ${network}...`).start()
+    const spinner = ora({
+      text: 'Fetching deployments...',
+      isSilent: !process.stdout.isTTY,
+    }).start()
 
     const admin_cap_type = `${PACKAGE_ID}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
@@ -81,13 +90,8 @@ export async function list(options = {}) {
       })
     }
 
+    spinner.clear()
     spinner.stop()
-
-    // Display network and address header
-    console.log('')
-    console.log(chalk.dim('  Network: ') + chalk.cyan(network))
-    console.log(chalk.dim('  Address: ') + chalk.cyan(address))
-    console.log('')
 
     // Format and display
     const table_str = format_sites_table(sites, network)

@@ -1,6 +1,8 @@
 import { Transaction } from '@mysten/sui/transactions'
 import Table from 'cli-table3'
 
+import { encode_base36 } from './base36.js'
+
 /**
  * @typedef {Object} TransactionResult
  * @property {Uint8Array} tx_bytes - Transaction bytes
@@ -21,7 +23,7 @@ import Table from 'cli-table3'
 // Versui package ID on testnet (env var can override for different networks)
 const PACKAGE_ID =
   process.env.VERSUI_PACKAGE_ID ||
-  '0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d'
+  '0x833d7ed0610c60df9cc430079ec9c21ac1a35d576d1b81123b918bd85fd73333'
 
 /**
  * Build a transaction that creates a Site (step 1 of deployment)
@@ -255,6 +257,7 @@ export async function query_owned_sites(owner, site_type, client) {
   return sites
 }
 
+
 /**
  * Format sites into CLI table
  * @param {SiteObject[]} sites - Array of sites
@@ -267,12 +270,14 @@ export function format_sites_table(sites, network) {
   }
 
   const table = new Table({
-    head: ['Site ID', 'Name'],
-    colWidths: [70, 30],
+    head: ['Site ID', 'Name', 'URL'],
+    colWidths: [70, 25, 55],
   })
 
   for (const site of sites) {
-    table.push([site.object_id, site.name])
+    const subdomain = encode_base36(site.object_id)
+    const url = `https://${subdomain}.versui.app`
+    table.push([site.object_id, site.name, url])
   }
 
   const summary = `\n  ${sites.length} site${sites.length === 1 ? '' : 's'} found`

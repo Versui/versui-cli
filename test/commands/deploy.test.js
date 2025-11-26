@@ -67,7 +67,7 @@ describe('upload_to_walrus_with_progress', () => {
                 },
               },
               storedQuiltBlobs: [
-                { identifier: 'index.html', quiltPatchId: 'patch_1' },
+                { identifier: '/index.html', quiltPatchId: 'patch_1' },
               ],
             }),
           ),
