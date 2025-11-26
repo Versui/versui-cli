@@ -11,6 +11,7 @@ import { deploy } from './commands/deploy.js'
 import { list } from './commands/list.js'
 import { delete_site } from './commands/delete.js'
 import { regenerate } from './commands/regenerate.js'
+import { domain_add, domain_remove, domain_list } from './commands/domain.js'
 
 const current_dir = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(
@@ -93,6 +94,52 @@ program
         console.log(result.sw_snippet)
       }
       console.log('')
+    } catch (error) {
+      handle_error(error)
+    }
+  })
+
+// Domain subcommands
+const domain_cmd = program
+  .command('domain')
+  .description('Manage custom domains')
+
+domain_cmd
+  .command('add')
+  .description('Add custom domain to a site')
+  .argument('<domain>', 'domain name (e.g., example.com)')
+  .option('--site <id>', 'site object ID (prompts if not provided)')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .action(async (domain, options) => {
+    try {
+      await domain_add(domain, options)
+    } catch (error) {
+      handle_error(error)
+    }
+  })
+
+domain_cmd
+  .command('remove')
+  .description('Remove custom domain from a site')
+  .argument('<domain>', 'domain name to remove')
+  .option('--site <id>', 'site object ID (prompts if not provided)')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .action(async (domain, options) => {
+    try {
+      await domain_remove(domain, options)
+    } catch (error) {
+      handle_error(error)
+    }
+  })
+
+domain_cmd
+  .command('list')
+  .description('List custom domains for your sites')
+  .option('--site <id>', 'filter by site object ID')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .action(async options => {
+    try {
+      await domain_list(options)
     } catch (error) {
       handle_error(error)
     }
