@@ -9,6 +9,11 @@ import ora from 'ora'
 // eslint-disable-next-line @typescript-eslint/naming-convention
 const execAsync = promisify(exec)
 
+// Versui contract addresses (testnet)
+const VERSUI_PACKAGE_ID =
+  process.env.VERSUI_PACKAGE_ID ||
+  '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36'
+
 /**
  * Delete one or more site deployments
  * @param {string | string[]} site_ids - Site object ID(s) to delete
@@ -65,7 +70,7 @@ export async function delete_site(site_ids, options = {}) {
 
     // Query all AdminCaps once (shared across all deletions)
     const spinner = ora('Finding AdminCaps...').start()
-    const admin_cap_type = `0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36::site::SiteAdminCap`
+    const admin_cap_type = `${VERSUI_PACKAGE_ID}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: {
@@ -169,7 +174,7 @@ export async function delete_site(site_ids, options = {}) {
             `Deleting resource ${i + 1}/${resource_count}: ${path}...`,
           ).start()
 
-          const delete_cmd = `sui client call --package 0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36 --module site --function delete_resource --args ${admin_cap_id} ${site_id} '${path}' --gas-budget 10000000`
+          const delete_cmd = `sui client call --package ${VERSUI_PACKAGE_ID} --module site --function delete_resource --args ${admin_cap_id} ${site_id} '${path}' --gas-budget 10000000`
 
           try {
             const { stdout: resources_exec_output } = await execAsync(
@@ -196,7 +201,7 @@ export async function delete_site(site_ids, options = {}) {
 
       // Delete site using sui client call
       const delete_spinner = ora('Deleting site...').start()
-      const delete_site_cmd = `sui client call --package 0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36 --module site --function delete_site --args ${admin_cap_id} ${site_id} --gas-budget 10000000`
+      const delete_site_cmd = `sui client call --package ${VERSUI_PACKAGE_ID} --module site --function delete_site --args ${admin_cap_id} ${site_id} --gas-budget 10000000`
 
       try {
         const { stdout: exec_output } = await execAsync(delete_site_cmd, {
