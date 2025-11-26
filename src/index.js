@@ -8,6 +8,7 @@ import { Command } from 'commander'
 import chalk from 'chalk'
 
 import { deploy } from './commands/deploy.js'
+import { update } from './commands/update.js'
 import { list } from './commands/list.js'
 import { delete_site } from './commands/delete.js'
 import { regenerate } from './commands/regenerate.js'
@@ -46,6 +47,23 @@ program
   .action(async (dir, options) => {
     try {
       await deploy(dir, options)
+    } catch (error) {
+      handle_error(error)
+    }
+  })
+
+program
+  .command('update')
+  .description('Update an existing site with new files')
+  .argument('<dir>', 'directory to deploy')
+  .requiredOption('--site <id>', 'site object ID to update')
+  .option('--network <network>', 'sui network (testnet, mainnet)', 'testnet')
+  .option('-e, --epochs <number>', 'storage duration for new uploads', '1')
+  .option('-y, --yes', 'skip confirmations')
+  .option('--json', 'output JSON only')
+  .action(async (dir, options) => {
+    try {
+      await update(dir, { ...options, epochs: Number(options.epochs) })
     } catch (error) {
       handle_error(error)
     }
