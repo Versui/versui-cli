@@ -6,6 +6,12 @@ import {
   get_sui_active_address,
   upload_to_walrus_with_progress,
 } from '../../src/commands/deploy.js'
+
+// Mock scan_directory to avoid filesystem access in tests
+const mock_scan_directory = () => [
+  '/test/dir/index.html',
+  '/test/dir/style.css',
+]
 import { format_bytes } from '../../src/commands/deploy/formatting.js'
 
 describe('format_bytes', () => {
@@ -87,6 +93,7 @@ describe('upload_to_walrus_with_progress', () => {
         progress_calls.push({ progress, message })
       },
       mock_spawn,
+      mock_scan_directory,
     )
 
     assert.strictEqual(
@@ -113,7 +120,13 @@ describe('upload_to_walrus_with_progress', () => {
     }
 
     await assert.rejects(
-      upload_to_walrus_with_progress('/test/dir', 1, () => {}, mock_spawn),
+      upload_to_walrus_with_progress(
+        '/test/dir',
+        1,
+        () => {},
+        mock_spawn,
+        mock_scan_directory,
+      ),
       /Walrus upload failed/,
     )
   })
@@ -157,6 +170,7 @@ describe('upload_to_walrus_with_progress', () => {
         progress_calls.push({ progress, message })
       },
       mock_spawn,
+      mock_scan_directory,
     )
 
     // Should track progress increasing and complete
@@ -187,7 +201,13 @@ describe('upload_to_walrus_with_progress', () => {
     }
 
     await assert.rejects(
-      upload_to_walrus_with_progress('/test/dir', 1, () => {}, mock_spawn),
+      upload_to_walrus_with_progress(
+        '/test/dir',
+        1,
+        () => {},
+        mock_spawn,
+        mock_scan_directory,
+      ),
       /Failed to parse walrus output/,
     )
   })
