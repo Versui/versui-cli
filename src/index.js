@@ -38,6 +38,7 @@ program
   .option('-e, --epochs <number>', 'storage duration in epochs')
   .option('--network <network>', 'sui network (testnet, mainnet)')
   .option('-n, --name <name>', 'site name (overrides .versui and package.json)')
+  .option('-s, --suins <name>', 'Link SuiNS domain to deployed site')
   .option('-y, --yes', 'skip confirmations (for CI/scripts)')
   .option('--json', 'output JSON only (for scripts/services)')
   .option('--custom-sw', 'force plugin mode (skip SW auto-detection)')

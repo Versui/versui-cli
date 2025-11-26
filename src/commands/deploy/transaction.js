@@ -46,7 +46,7 @@ export function create_site_transaction({ package_id, wallet, site_name }) {
  * @param {string} params.wallet - Wallet address
  * @param {string} params.admin_cap_id - AdminCap object ID from step 1
  * @param {string} params.site_id - Shared Site object ID from step 1
- * @param {string} params.site_version - Site object version from step 1
+ * @param {string|number} params.initial_shared_version - Initial shared version of Site object
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.quilt_patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
  * @returns {Transaction} Configured transaction object
@@ -56,7 +56,7 @@ export function add_resources_transaction({
   wallet,
   admin_cap_id,
   site_id,
-  site_version,
+  initial_shared_version,
   quilt_patches,
   file_metadata,
 }) {
@@ -67,8 +67,12 @@ export function add_resources_transaction({
   const identifier_to_path = build_identifier_map(file_metadata)
 
   for (const patch of quilt_patches) {
+    // Normalize identifier: ensure leading slash, no double slashes
+    const normalized_identifier = patch.identifier.startsWith('/')
+      ? patch.identifier
+      : '/' + patch.identifier
     const full_path =
-      identifier_to_path[patch.identifier] || '/' + patch.identifier
+      identifier_to_path[normalized_identifier] || normalized_identifier
     const info = file_metadata[full_path]
     if (!info) continue
 
@@ -78,7 +82,7 @@ export function add_resources_transaction({
         tx.object(admin_cap_id), // AdminCap reference (owned object)
         tx.sharedObjectRef({
           objectId: site_id,
-          initialSharedVersion: site_version,
+          initialSharedVersion: initial_shared_version,
           mutable: true,
         }), // Shared Site reference (mutable shared object)
         tx.pure.string(full_path),

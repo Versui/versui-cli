@@ -11,21 +11,22 @@ import figlet from 'figlet'
 import prompts from 'prompts'
 import logUpdate from 'log-update'
 
-import { hash_content } from '../lib/hash.js'
-import { scan_directory, get_content_type, read_file } from '../lib/files.js'
+import { encode_base36 } from '../lib/base36.js'
 import {
   read_versui_config,
   get_aggregators,
   get_site_name,
 } from '../lib/config.js'
-import { detect_service_worker, generate_sw_snippet } from '../lib/sw.js'
+import { scan_directory, get_content_type, read_file } from '../lib/files.js'
 import { generate_bootstrap } from '../lib/generate.js'
-
+import { hash_content } from '../lib/hash.js'
 import {
-  validate_directory,
-  check_prerequisites,
-  get_prerequisite_error,
-} from './deploy/validate.js'
+  get_owned_suins_names,
+  link_suins_to_site,
+  normalize_suins_name,
+} from '../lib/suins.js'
+import { detect_service_worker, generate_sw_snippet } from '../lib/sw.js'
+
 import { build_files_metadata } from './deploy/file-metadata.js'
 import { format_bytes, format_wallet_address } from './deploy/formatting.js'
 import {
@@ -33,6 +34,11 @@ import {
   create_site_transaction,
   add_resources_transaction,
 } from './deploy/transaction.js'
+import {
+  validate_directory,
+  check_prerequisites,
+  get_prerequisite_error,
+} from './deploy/validate.js'
 import { get_epoch_info_with_fallback } from './deploy/walrus-info.js'
 
 const VERSUI_PACKAGE_IDS = {
@@ -154,15 +160,6 @@ function render_state(include_header = false) {
     const spinner_char =
       SPINNER_FRAMES[state.spinner_frame % SPINNER_FRAMES.length]
     lines.push(`  ${chalk.cyan(spinner_char)} ${state.spinner_text}`)
-
-    // Show progress bar if uploading
-    if (state.upload_progress > 0) {
-      const bar_width = 30
-      const filled = Math.floor((state.upload_progress / 100) * bar_width)
-      const empty = bar_width - filled
-      const bar = chalk.cyan('█'.repeat(filled)) + chalk.dim('░'.repeat(empty))
-      lines.push(`      ${bar} ${state.upload_progress}%`)
-    }
   }
 
   lines.push('')
@@ -295,6 +292,7 @@ export async function deploy(dir, options = {}) {
     yes: auto_yes = false,
     customSw: force_custom_sw = false,
     name: cli_site_name = null,
+    suins: suins_flag = null,
   } = options
   let { network, epochs } = options
 
@@ -543,15 +541,15 @@ export async function deploy(dir, options = {}) {
       auto_yes,
     )
 
+    // Execute transaction 1
     state.spinner_text = 'Creating site...'
     update_display()
 
-    // Execute transaction 1
     let tx1_result
     try {
       const output = execSync(`sui client serialized-tx ${tx1_base64} --json`, {
         encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ['inherit', 'pipe', 'pipe'],
       })
       tx1_result = JSON.parse(output)
     } catch (err) {
@@ -569,10 +567,11 @@ export async function deploy(dir, options = {}) {
     }
 
     const site_obj = tx1_result?.objectChanges?.find(
-      c => c.type === 'created' && c.objectType?.includes('::site::Site'),
+      c => c.type === 'created' && c.objectType?.endsWith('::site::Site'),
     )
     const admin_cap_obj = tx1_result?.objectChanges?.find(
-      c => c.type === 'created' && c.objectType?.includes('::SiteAdminCap'),
+      c =>
+        c.type === 'created' && c.objectType?.endsWith('::site::SiteAdminCap'),
     )
 
     if (!site_obj?.objectId || !admin_cap_obj?.objectId) {
@@ -583,18 +582,29 @@ export async function deploy(dir, options = {}) {
 
     const site_id = site_obj.objectId
     const admin_cap_id = admin_cap_obj.objectId
-    const site_version = site_obj.version || site_obj.digest || '1' // Initial version for newly created object
+    const initial_shared_version =
+      site_obj.owner?.Shared?.initial_shared_version
+
+    if (!initial_shared_version) {
+      throw new Error(
+        'Failed to extract initial_shared_version from Site object',
+      )
+    }
 
     state.site_id = site_id
 
     // === TRANSACTION 2: Add Resources ===
+    // Stop spinner before building next transaction (prevents duplication with prompts)
+    state.spinner_text = null
+    update_display()
+
     // Build transaction (fast, no spinner needed)
     const tx2 = add_resources_transaction({
       package_id,
       wallet: state.wallet,
       admin_cap_id,
       site_id,
-      site_version,
+      initial_shared_version,
       quilt_patches,
       file_metadata,
     })
@@ -624,7 +634,7 @@ export async function deploy(dir, options = {}) {
     try {
       execSync(`sui client serialized-tx ${tx2_base64} --json`, {
         encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ['inherit', 'pipe', 'pipe'],
       })
     } catch (err) {
       throw new Error(`Transaction failed: ${err.stderr || err.message}`)
@@ -640,6 +650,8 @@ export async function deploy(dir, options = {}) {
 
     // If no SW detected, ask user interactively
     if (sw_detection.type === 'none' && !auto_yes && !json_mode) {
+      state.spinner_text = null
+      update_display()
       finish_display() // Stop spinner before showing prompt
       console.log('')
       console.log(
@@ -668,15 +680,20 @@ export async function deploy(dir, options = {}) {
 
     // Generate bootstrap (only if no SW detected and user didn't say they have one)
     if (sw_detection.type === 'none') {
-      const index_patch = quilt_patches.find(p => p.identifier === 'index.html')
+      const index_patch = quilt_patches.find(
+        p => p.identifier === '/index.html',
+      )
       if (!index_patch) throw new Error('No index.html found')
 
       const identifier_to_path = build_identifier_map(file_metadata)
       /** @type {Object<string, string>} */
       const resource_map = {}
       for (const patch of quilt_patches) {
+        const normalized_identifier = patch.identifier.startsWith('/')
+          ? patch.identifier
+          : '/' + patch.identifier
         const full_path =
-          identifier_to_path[patch.identifier] || '/' + patch.identifier
+          identifier_to_path[normalized_identifier] || normalized_identifier
         resource_map[full_path] = patch.quiltPatchId
       }
 
@@ -705,6 +722,71 @@ export async function deploy(dir, options = {}) {
     // Stop spinner animation
     clearInterval(spinner_interval)
 
+    // SuiNS domain linking (after successful deploy)
+    let linked_suins_name = null
+    const subdomain = encode_base36(site_id)
+
+    /**
+     * Execute SuiNS link transaction
+     * @param {string} name - SuiNS name to link
+     * @returns {Promise<boolean>} Success status
+     */
+    const execute_suins_link = async name => {
+      const result = await link_suins_to_site(name, site_id)
+      if (!result.success) {
+        console.log(chalk.yellow(`  ⚠ Failed to link SuiNS: ${result.error}`))
+        return false
+      }
+
+      // Build and execute the transaction
+      try {
+        result.transaction.setSender(state.wallet)
+        const tx_bytes = await result.transaction.build({ client: sui_client })
+        const tx_base64 = toBase64(tx_bytes)
+
+        execSync(`sui client serialized-tx ${tx_base64} --json`, {
+          encoding: 'utf8',
+          stdio: ['inherit', 'pipe', 'pipe'],
+        })
+        return true
+      } catch (err) {
+        console.log(
+          chalk.yellow(`  ⚠ Failed to execute SuiNS link: ${err.message}`),
+        )
+        return false
+      }
+    }
+
+    if (suins_flag) {
+      // Flag provided: link directly
+      const normalized = normalize_suins_name(suins_flag)
+      if (await execute_suins_link(normalized)) {
+        linked_suins_name = normalized
+      }
+    } else if (!auto_yes && !json_mode) {
+      // Interactive: check for owned names
+      const owned_names = await get_owned_suins_names(state.wallet)
+
+      if (owned_names.length > 0) {
+        console.log('')
+        const response = await prompts({
+          type: 'select',
+          name: 'selected',
+          message: 'Link a SuiNS name to this site?',
+          choices: [
+            ...owned_names.map(name => ({ title: name, value: name })),
+            { title: chalk.dim('Skip'), value: 'skip' },
+          ],
+        })
+
+        if (response.selected && response.selected !== 'skip') {
+          if (await execute_suins_link(response.selected)) {
+            linked_suins_name = response.selected
+          }
+        }
+      }
+    }
+
     // Final output - clear and show final state
     console.clear()
     console.log('')
@@ -719,6 +801,17 @@ export async function deploy(dir, options = {}) {
     console.log(
       `  ${chalk.dim('Blob ID:')}     ${chalk.magenta(state.blob_id)}`,
     )
+
+    // Output URLs (base36 + SuiNS if linked)
+    console.log(
+      `  ${chalk.dim('URL:')}         ${chalk.cyan(`https://${subdomain}.versui.app`)}`,
+    )
+    if (linked_suins_name) {
+      const suins_subdomain = linked_suins_name.replace('.sui', '')
+      console.log(
+        `  ${chalk.dim('SuiNS URL:')}   ${chalk.cyan(`https://${suins_subdomain}.versui.app`)}`,
+      )
+    }
 
     if (sw_detection.type === 'none') {
       console.log(
@@ -736,8 +829,11 @@ export async function deploy(dir, options = {}) {
       /** @type {Object<string, string>} */
       const resource_map = {}
       for (const patch of quilt_patches) {
+        const normalized_identifier = patch.identifier.startsWith('/')
+          ? patch.identifier
+          : '/' + patch.identifier
         const full_path =
-          identifier_to_path[patch.identifier] || '/' + patch.identifier
+          identifier_to_path[normalized_identifier] || normalized_identifier
         resource_map[full_path] = patch.quiltPatchId
       }
 
@@ -853,7 +949,7 @@ async function deploy_json(dir, options) {
   // Execute transaction 1 (sui client auto-signs and executes)
   const tx1_output = execSync(`sui client serialized-tx ${tx1_base64} --json`, {
     encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['inherit', 'pipe', 'pipe'],
   })
   const tx1_result = JSON.parse(tx1_output)
 
@@ -884,8 +980,12 @@ async function deploy_json(dir, options) {
 
   // Add all resources to the shared Site
   for (const patch of patches) {
+    // Normalize identifier: ensure leading slash, no double slashes
+    const normalized_identifier = patch.identifier.startsWith('/')
+      ? patch.identifier
+      : '/' + patch.identifier
     const full_path =
-      identifier_to_path[patch.identifier] || '/' + patch.identifier
+      identifier_to_path[normalized_identifier] || normalized_identifier
     const info = file_metadata[full_path]
     if (!info) continue
 
@@ -909,15 +1009,20 @@ async function deploy_json(dir, options) {
   // Execute transaction 2 (sui client auto-signs and executes)
   const tx2_output = execSync(`sui client serialized-tx ${tx2_base64} --json`, {
     encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['inherit', 'pipe', 'pipe'],
   })
   const tx2_result = JSON.parse(tx2_output)
+
+  const subdomain = encode_base36(site_id)
+  const gateway_host = network === 'mainnet' ? 'walrus.site' : 'walrus.site'
 
   console.log(
     JSON.stringify({
       site_id,
       admin_cap_id,
       blob_id,
+      subdomain,
+      url: `https://${subdomain}.${gateway_host}`,
       patches: patches.length,
       tx1_digest: tx1_result?.digest,
       tx2_digest: tx2_result?.digest,
