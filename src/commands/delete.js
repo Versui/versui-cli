@@ -65,7 +65,7 @@ export async function delete_site(site_ids, options = {}) {
 
     // Query all AdminCaps once (shared across all deletions)
     const spinner = ora('Finding AdminCaps...').start()
-    const admin_cap_type = `0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d::site::SiteAdminCap`
+    const admin_cap_type = `0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: {
@@ -169,7 +169,7 @@ export async function delete_site(site_ids, options = {}) {
             `Deleting resource ${i + 1}/${resource_count}: ${path}...`,
           ).start()
 
-          const delete_cmd = `sui client call --package 0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d --module site --function delete_resource --args ${admin_cap_id} ${site_id} '${path}' --gas-budget 10000000`
+          const delete_cmd = `sui client call --package 0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36 --module site --function delete_resource --args ${admin_cap_id} ${site_id} '${path}' --gas-budget 10000000`
 
           try {
             const { stdout: resources_exec_output } = await execAsync(
@@ -196,7 +196,7 @@ export async function delete_site(site_ids, options = {}) {
 
       // Delete site using sui client call
       const delete_spinner = ora('Deleting site...').start()
-      const delete_site_cmd = `sui client call --package 0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d --module site --function delete_site --args ${admin_cap_id} ${site_id} --gas-budget 10000000`
+      const delete_site_cmd = `sui client call --package 0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36 --module site --function delete_site --args ${admin_cap_id} ${site_id} --gas-budget 10000000`
 
       try {
         const { stdout: exec_output } = await execAsync(delete_site_cmd, {
