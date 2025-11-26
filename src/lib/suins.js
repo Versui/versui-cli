@@ -210,7 +210,9 @@ export async function get_owned_suins_names(
       if (content?.dataType !== 'moveObject') continue
 
       const { domain_name, expiration_timestamp_ms: exp_ms } =
-        content.fields ?? {}
+        /** @type {{ domain_name?: string, expiration_timestamp_ms?: string | number }} */ (
+          content.fields
+        ) ?? {}
       const expiration_timestamp_ms = Number(exp_ms ?? 0)
 
       // Skip expired names

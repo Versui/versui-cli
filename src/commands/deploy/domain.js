@@ -55,26 +55,21 @@ export async function validate_suins_domain(domain, wallet, client) {
   try {
     const parsed = parse_domain_name(domain)
 
-    // Get owned name records for wallet
-    const records = await client.getOwnedNameRecords({
-      address: wallet,
-    })
-
-    // Find matching domain
-    const record = records.data?.find(r => r.name === parsed.name)
+    // Get name record for the specific domain
+    const record = await client.getNameRecord(`${parsed.name}.sui`)
 
     if (!record) {
       return {
         valid: false,
         owned: false,
         expired: false,
-        error: `Domain ${domain} is not owned by wallet ${wallet}`,
+        error: `Domain ${domain} not found in SuiNS registry`,
       }
     }
 
     // Check expiration
     const now = Date.now()
-    const expired = record.expiration_timestamp_ms < now
+    const expired = record.expirationTimestampMs < now
 
     if (expired) {
       return {
@@ -82,6 +77,18 @@ export async function validate_suins_domain(domain, wallet, client) {
         owned: true,
         expired: true,
         error: `Domain ${domain} has expired`,
+      }
+    }
+
+    // Check ownership by verifying targetAddress matches wallet
+    const owned = record.targetAddress === wallet
+
+    if (!owned) {
+      return {
+        valid: false,
+        owned: false,
+        expired: false,
+        error: `Domain ${domain} is not owned by wallet ${wallet}`,
       }
     }
 
