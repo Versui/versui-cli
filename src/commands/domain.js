@@ -10,14 +10,13 @@ import Table from 'cli-table3'
 
 // Versui package IDs
 const VERSUI_PACKAGE_IDS = {
-  testnet: '0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d',
+  testnet: '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36',
   mainnet: null, // TODO: Add mainnet package ID when deployed
 }
 
 // DomainRegistry shared object IDs (deployed via domain_registry.move init)
-// NOTE: This must be updated after deploying the domain_registry module
 const DOMAIN_REGISTRY_IDS = {
-  testnet: process.env.DOMAIN_REGISTRY_ID || null,
+  testnet: '0x02a9848d206767eb7d548786fe9368cf2fbf73ac6a865324948e89f4e5efa6f1',
   mainnet: null,
 }
 

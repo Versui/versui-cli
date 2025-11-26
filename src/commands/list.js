@@ -7,7 +7,7 @@ import ora from 'ora'
 import { format_sites_table } from '../lib/sui.js'
 
 const PACKAGE_ID =
-  '0x03ba7b9619c24fc18bb0b329886ae1a79a5ddb8f432a60f138dab770a9d0277d'
+  '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36'
 
 /**
  * List deployments
