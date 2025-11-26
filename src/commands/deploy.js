@@ -1082,6 +1082,7 @@ async function deploy_json(dir, options) {
  * @param {number} epochs - Storage duration
  * @param {Function} on_progress - Progress callback (progress: 0-100, message: string)
  * @param {Function} spawn_fn - Spawn function (injectable for testing)
+ * @param {Function} scan_directory_fn - Scan directory function (injectable for testing)
  * @returns {Promise<Object>} Quilt result
  */
 async function upload_to_walrus_with_progress(
@@ -1089,10 +1090,11 @@ async function upload_to_walrus_with_progress(
   epochs,
   on_progress,
   spawn_fn = spawn,
+  scan_directory_fn = scan_directory,
 ) {
   return new Promise((resolve, reject) => {
     // Scan files and build --blobs args with JSON format
-    const file_paths = scan_directory(dir, dir)
+    const file_paths = scan_directory_fn(dir, dir)
     const blobs_args = ['--blobs']
     for (const fp of file_paths) {
       const rel = '/' + relative(dir, fp).replace(/\\/g, '/')
