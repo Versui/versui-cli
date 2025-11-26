@@ -23,7 +23,7 @@ import { encode_base36 } from './base36.js'
 // Versui package ID on testnet (env var can override for different networks)
 const PACKAGE_ID =
   process.env.VERSUI_PACKAGE_ID ||
-  '0x833d7ed0610c60df9cc430079ec9c21ac1a35d576d1b81123b918bd85fd73333'
+  '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36'
 
 /**
  * Build a transaction that creates a Site (step 1 of deployment)
