@@ -188,6 +188,48 @@ function get_sui_active_address() {
   }
 }
 
+/**
+ * Run a command asynchronously (non-blocking for spinner animation)
+ * @param {string} cmd - Command to run
+ * @param {string[]} args - Command arguments
+ * @param {Function} spawn_fn - Spawn function (injectable for testing)
+ * @returns {Promise<string>} stdout output
+ */
+function run_command_async(cmd, args, spawn_fn = spawn) {
+  return new Promise((resolve, reject) => {
+    const child = spawn_fn(cmd, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+
+    let stdout_data = ''
+    let stderr_data = ''
+
+    child.stdout.on('data', chunk => {
+      stdout_data += chunk.toString()
+    })
+
+    child.stderr.on('data', chunk => {
+      stderr_data += chunk.toString()
+    })
+
+    child.on('error', err => {
+      reject(new Error(`Failed to spawn ${cmd}: ${err.message}`))
+    })
+
+    child.on('close', code => {
+      if (code !== 0) {
+        const error = Object.assign(
+          new Error(`Command failed: ${cmd} ${args.join(' ')}`),
+          { stderr: stderr_data, stdout: stdout_data },
+        )
+        reject(error)
+        return
+      }
+      resolve(stdout_data)
+    })
+  })
+}
+
 async function get_walrus_price_estimate(size_bytes, epochs) {
   try {
     const output = execSync('walrus info price --json', {
@@ -547,10 +589,12 @@ export async function deploy(dir, options = {}) {
 
     let tx1_result
     try {
-      const output = execSync(`sui client serialized-tx ${tx1_base64} --json`, {
-        encoding: 'utf8',
-        stdio: ['inherit', 'pipe', 'pipe'],
-      })
+      const output = await run_command_async('sui', [
+        'client',
+        'serialized-tx',
+        tx1_base64,
+        '--json',
+      ])
       tx1_result = JSON.parse(output)
     } catch (err) {
       // Log orphaned blob for reference (walrus upload succeeded but sui tx failed)
@@ -632,10 +676,12 @@ export async function deploy(dir, options = {}) {
 
     // Execute transaction 2
     try {
-      execSync(`sui client serialized-tx ${tx2_base64} --json`, {
-        encoding: 'utf8',
-        stdio: ['inherit', 'pipe', 'pipe'],
-      })
+      await run_command_async('sui', [
+        'client',
+        'serialized-tx',
+        tx2_base64,
+        '--json',
+      ])
     } catch (err) {
       throw new Error(`Transaction failed: ${err.stderr || err.message}`)
     }
@@ -765,7 +811,7 @@ export async function deploy(dir, options = {}) {
       }
     } else if (!auto_yes && !json_mode) {
       // Interactive: check for owned names
-      const owned_names = await get_owned_suins_names(state.wallet)
+      const owned_names = await get_owned_suins_names(state.wallet, { network })
 
       if (owned_names.length > 0) {
         console.log('')

@@ -184,14 +184,15 @@ const SUINS_NFT_TYPE =
  * @param {string} wallet_address - Sui wallet address
  * @param {Object} [deps] - Injectable dependencies
  * @param {import('@mysten/sui/client').SuiClient} [deps.sui_client] - Sui client
+ * @param {'mainnet' | 'testnet'} [deps.network] - Network to query (defaults to testnet)
  * @returns {Promise<string[]>} Array of owned SuiNS names (e.g., ["mysite.sui", "other.sui"])
  */
 export async function get_owned_suins_names(
   wallet_address,
-  { sui_client } = {},
+  { sui_client, network = 'testnet' } = {},
 ) {
   const effective_client =
-    sui_client ?? new SuiClient({ url: getFullnodeUrl('testnet') })
+    sui_client ?? new SuiClient({ url: getFullnodeUrl(network) })
 
   try {
     // Query all SuiNS NFT objects owned by the wallet

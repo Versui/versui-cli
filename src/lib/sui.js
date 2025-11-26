@@ -257,7 +257,6 @@ export async function query_owned_sites(owner, site_type, client) {
   return sites
 }
 
-
 /**
  * Format sites into CLI table
  * @param {SiteObject[]} sites - Array of sites
