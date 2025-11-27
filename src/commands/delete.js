@@ -203,26 +203,37 @@ export async function delete_site(site_ids, options = {}) {
       const resource_count = resources_response.data.length
       res_spinner.succeed(`Found ${resource_count} resource(s)`)
 
-      // If site has resources, delete them first
+      // If site has resources, delete them first (batch operation)
       if (resource_count > 0) {
-        // Delete each resource
-        for (let i = 0; i < resources_response.data.length; i++) {
-          const resource = resources_response.data[i]
+        // Collect all valid resource paths
+        const paths_to_delete = []
+        const invalid_paths = []
+
+        for (const resource of resources_response.data) {
           const path = /** @type {string} */ (resource.name.value)
 
-          // Validate path before processing
           if (!is_valid_resource_path(path)) {
-            console.log(
-              chalk.yellow(
-                `  ⚠ Skipping invalid resource path: ${path} (contains shell metacharacters or invalid format)`,
-              ),
-            )
-            console.log('')
+            invalid_paths.push(path)
             continue
           }
 
+          paths_to_delete.push(path)
+        }
+
+        // Report invalid paths (if any)
+        if (invalid_paths.length > 0) {
+          console.log(
+            chalk.yellow(
+              `  ⚠ Skipping ${invalid_paths.length} invalid resource path(s) (contains shell metacharacters or invalid format)`,
+            ),
+          )
+          console.log('')
+        }
+
+        // Delete all resources in one transaction
+        if (paths_to_delete.length > 0) {
           const del_spinner = ora(
-            `Deleting resource ${i + 1}/${resource_count}: ${path}...`,
+            `Deleting ${paths_to_delete.length} resource(s) in batch...`,
           ).start()
 
           try {
@@ -236,13 +247,13 @@ export async function delete_site(site_ids, options = {}) {
                 '--module',
                 'site',
                 '--function',
-                'delete_resource',
+                'delete_resources_batch',
                 '--args',
                 admin_cap_id,
                 site_id,
-                path,
+                JSON.stringify(paths_to_delete),
                 '--gas-budget',
-                '10000000',
+                '50000000',
               ],
               { encoding: 'utf-8' },
             )
@@ -253,17 +264,19 @@ export async function delete_site(site_ids, options = {}) {
 
             const stdout = result.stdout || ''
             if (!stdout.includes('Status: Success')) {
-              del_spinner.fail(`Failed to delete resource: ${path}`)
+              del_spinner.fail(
+                `Failed to delete resources (check gas budget or Move execution)`,
+              )
               console.log('')
-              continue
+            } else {
+              del_spinner.succeed(
+                `Deleted ${paths_to_delete.length} resource(s) in 1 transaction`,
+              )
             }
           } catch (error) {
-            del_spinner.fail(`Failed to delete resource: ${path}`)
+            del_spinner.fail(`Failed to delete resources: ${error.message}`)
             console.log('')
-            continue
           }
-
-          del_spinner.succeed(`Deleted resource ${i + 1}/${resource_count}`)
         }
       }
 

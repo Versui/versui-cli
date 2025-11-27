@@ -1,10 +1,10 @@
 /**
  * Centralized Versui package ID configuration
- * V9 package with renew_site feature
+ * V10 package with delete_resources_batch feature
  */
 
-const V9_PACKAGE_ID =
-  '0x824052b308a7edad4ef16eef0f4f724786577f7fef68b6dddeeba8006ead9eb8'
+const V10_PACKAGE_ID =
+  '0x33ae55f9781df0d89a9b16b091daa8c8ee826638caca2e68604b1647fd0e84e2'
 
 /**
  * Validates Sui package ID format
@@ -38,7 +38,7 @@ function get_validated_package_id(env_var, default_value) {
 export const VERSUI_PACKAGE_IDS = {
   testnet: get_validated_package_id(
     process.env.VERSUI_PACKAGE_ID_TESTNET,
-    V9_PACKAGE_ID,
+    V10_PACKAGE_ID,
   ),
   mainnet: get_validated_package_id(
     process.env.VERSUI_PACKAGE_ID_MAINNET,
