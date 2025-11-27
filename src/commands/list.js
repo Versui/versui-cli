@@ -5,9 +5,7 @@ import chalk from 'chalk'
 import ora from 'ora'
 
 import { format_sites_table } from '../lib/sui.js'
-
-const PACKAGE_ID =
-  '0x1aa91fe1bdfb5f156ad2790173f955443f7b67004ea3171f49c12eb12ca36568'
+import { get_versui_package_id } from '../lib/env.js'
 
 /**
  * List deployments
@@ -40,7 +38,12 @@ export async function list(options = {}) {
       isSilent: !process.stdout.isTTY,
     }).start()
 
-    const admin_cap_type = `${PACKAGE_ID}::site::SiteAdminCap`
+    const package_id = get_versui_package_id(network)
+    if (!package_id) {
+      throw new Error(`Versui package not deployed on ${network} yet`)
+    }
+
+    const admin_cap_type = `${package_id}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: {

@@ -23,16 +23,22 @@ export function build_identifier_map(file_metadata) {
  * @param {string} params.package_id - Versui package ID
  * @param {string} params.wallet - Wallet address
  * @param {string} params.site_name - Site name
+ * @param {string} [params.favicon_url=''] - Favicon URL (optional)
  * @returns {Transaction} Configured transaction object
  */
-export function create_site_transaction({ package_id, wallet, site_name }) {
+export function create_site_transaction({
+  package_id,
+  wallet,
+  site_name,
+  favicon_url = '',
+}) {
   const tx = new Transaction()
   tx.setSender(wallet)
 
   // create_site entry function (returns AdminCap to sender, shares Site)
   tx.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx.pure.string(site_name)],
+    arguments: [tx.pure.string(site_name), tx.pure.string(favicon_url)],
   })
 
   return tx

@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, normalize } from 'node:path'
 
 import { minimatch } from 'minimatch'
 import mime from 'mime'
@@ -12,6 +12,14 @@ export function read_file(file_path) {
   return readFileSync(file_path)
 }
 
+function sanitize_ignore_pattern(pattern) {
+  // Reject patterns containing path traversal sequences
+  if (pattern.includes('../') || pattern.includes('..\\')) {
+    return null
+  }
+  return pattern
+}
+
 function read_ignore_patterns(project_dir) {
   const ignore_file = join(project_dir, '.versuignore')
   if (!existsSync(ignore_file)) return []
@@ -19,10 +27,14 @@ function read_ignore_patterns(project_dir) {
     .split('\n')
     .map(l => l.trim())
     .filter(l => l && !l.startsWith('#'))
+    .map(sanitize_ignore_pattern)
+    .filter(p => p !== null)
 }
 
 function should_ignore(file_path, patterns) {
-  return patterns.some(p => minimatch(file_path, p, { dot: true }))
+  // Normalize file path to prevent path traversal
+  const normalized_path = normalize(file_path).replace(/\\/g, '/')
+  return patterns.some(p => minimatch(normalized_path, p, { dot: true }))
 }
 
 export function scan_directory(dir, base_dir, ignore_patterns = null) {
