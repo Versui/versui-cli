@@ -965,7 +965,14 @@ async function deploy_json(dir, options) {
 
   const walrus_result = spawnSync(
     'walrus',
-    ['store-quilt', '--blobs', ...blobs_args, '--epochs', String(epochs), '--json'],
+    [
+      'store-quilt',
+      '--blobs',
+      ...blobs_args,
+      '--epochs',
+      String(epochs),
+      '--json',
+    ],
     {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],

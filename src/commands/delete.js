@@ -208,7 +208,7 @@ export async function delete_site(site_ids, options = {}) {
         // Delete each resource
         for (let i = 0; i < resources_response.data.length; i++) {
           const resource = resources_response.data[i]
-          const path = resource.name.value
+          const path = /** @type {string} */ (resource.name.value)
 
           // Validate path before processing
           if (!is_valid_resource_path(path)) {

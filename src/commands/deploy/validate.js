@@ -22,7 +22,7 @@ export function has_cli(command) {
   try {
     const result = spawnSync('which', [command], {
       encoding: 'utf-8',
-      stdio: 'pipe'
+      stdio: 'pipe',
     })
     return result.status === 0
   } catch {
