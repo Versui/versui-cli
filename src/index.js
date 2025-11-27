@@ -8,10 +8,12 @@ import { Command } from 'commander'
 import chalk from 'chalk'
 
 import { deploy } from './commands/deploy.js'
+import { update } from './commands/update.js'
 import { list } from './commands/list.js'
 import { delete_site } from './commands/delete.js'
 import { regenerate } from './commands/regenerate.js'
 import { domain_add, domain_remove, domain_list } from './commands/domain.js'
+import { suins_add, suins_list } from './commands/suins.js'
 
 const current_dir = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(
@@ -46,6 +48,23 @@ program
   .action(async (dir, options) => {
     try {
       await deploy(dir, options)
+    } catch (error) {
+      handle_error(error)
+    }
+  })
+
+program
+  .command('update')
+  .description('Update an existing site with new files')
+  .argument('<dir>', 'directory to deploy')
+  .requiredOption('--site <id>', 'site object ID to update')
+  .option('--network <network>', 'sui network (testnet, mainnet)', 'testnet')
+  .option('-e, --epochs <number>', 'storage duration for new uploads', '1')
+  .option('-y, --yes', 'skip confirmations')
+  .option('--json', 'output JSON only')
+  .action(async (dir, options) => {
+    try {
+      await update(dir, { ...options, epochs: Number(options.epochs) })
     } catch (error) {
       handle_error(error)
     }
@@ -140,6 +159,37 @@ domain_cmd
   .action(async options => {
     try {
       await domain_list(options)
+    } catch (error) {
+      handle_error(error)
+    }
+  })
+
+// SuiNS subcommands
+const suins_cmd = program
+  .command('suins')
+  .description('Manage SuiNS name linking')
+
+suins_cmd
+  .command('add')
+  .description('Link a SuiNS name to a site')
+  .argument('<name>', 'SuiNS name (e.g., mysite.sui or @mysite)')
+  .option('--site <id>', 'site object ID (prompts if not provided)')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .action(async (name, options) => {
+    try {
+      await suins_add(name, options)
+    } catch (error) {
+      handle_error(error)
+    }
+  })
+
+suins_cmd
+  .command('list')
+  .description('List your SuiNS names with linked status')
+  .option('--network <network>', 'sui network (testnet, mainnet)')
+  .action(async options => {
+    try {
+      await suins_list(options)
     } catch (error) {
       handle_error(error)
     }

@@ -42,7 +42,7 @@ import {
 import { get_epoch_info_with_fallback } from './deploy/walrus-info.js'
 
 const VERSUI_PACKAGE_IDS = {
-  testnet: '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36',
+  testnet: '0x1aa91fe1bdfb5f156ad2790173f955443f7b67004ea3171f49c12eb12ca36568',
   mainnet: null, // TODO: Add mainnet package ID when deployed
 }
 const versui_gradient = gradient(['#00d4ff', '#00ffd1', '#7c3aed'])
