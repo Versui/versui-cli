@@ -378,7 +378,8 @@ export async function deploy(dir, options = {}) {
 
   // Prompt for name if NOT in .versui config and interactive mode
   // (Even if package.json has a name, we should prompt to confirm/change)
-  const has_stored_name = versui_config?.name && versui_config.name.trim().length > 0
+  const has_stored_name =
+    versui_config?.name && versui_config.name.trim().length > 0
   if (!has_stored_name && !auto_yes && !cli_site_name) {
     console.log('')
     const response = await prompts({

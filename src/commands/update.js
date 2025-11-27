@@ -8,7 +8,7 @@ import chalk from 'chalk'
 import ora from 'ora'
 
 import { scan_directory } from '../lib/files.js'
-import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
+import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
 
 import { validate_directory, check_prerequisites } from './deploy/validate.js'
 import { build_files_metadata } from './deploy/file-metadata.js'
@@ -141,11 +141,16 @@ async function fetch_site_resources(site_id, sui_client) {
  * @param {string} site_id - Site object ID
  * @param {string} wallet - Wallet address
  * @param {SuiClient} sui_client - Sui client
- * @param {string} package_id - Package ID
+ * @param {string} original_package_id - Original package ID (for type filtering)
  * @returns {Promise<string|null>} AdminCap object ID or null
  */
-async function find_admin_cap(site_id, wallet, sui_client, package_id) {
-  const admin_cap_type = `${package_id}::site::SiteAdminCap`
+async function find_admin_cap(
+  site_id,
+  wallet,
+  sui_client,
+  original_package_id,
+) {
+  const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
   const admin_caps = await sui_client.getOwnedObjects({
     owner: wallet,
     filter: { StructType: admin_cap_type },
@@ -378,9 +383,16 @@ export async function update(dir, options = {}) {
     throw new Error('No active Sui wallet. Run: sui client new-address ed25519')
   }
 
-  const package_id = VERSUI_PACKAGE_IDS[network]
+  const package_id = get_versui_package_id(network)
   if (!package_id) {
     throw new Error(`Versui package not deployed on ${network} yet`)
+  }
+
+  const original_package_id = get_original_package_id(network)
+  if (!original_package_id) {
+    throw new Error(
+      `Original Versui package not found on ${network}. Cannot query existing objects.`,
+    )
   }
 
   const rpc_url = getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet')
@@ -397,7 +409,7 @@ export async function update(dir, options = {}) {
     site_id,
     wallet,
     sui_client,
-    package_id,
+    original_package_id,
   )
   if (!admin_cap_id) {
     spinner.fail()

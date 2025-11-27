@@ -8,7 +8,7 @@ import ora from 'ora'
 import prompts from 'prompts'
 import Table from 'cli-table3'
 
-import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
+import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
 
 // DomainRegistry shared object IDs (deployed via domain_registry.move init)
 const DOMAIN_REGISTRY_IDS = {
@@ -115,11 +115,11 @@ function validate_domain_format(domain) {
  * @param {string} site_id - Site object ID
  * @param {string} address - Wallet address
  * @param {import('@mysten/sui/client').SuiClient} client - Sui client
- * @param {string} package_id - Versui package ID
+ * @param {string} original_package_id - Original package ID (for type filtering)
  * @returns {Promise<string|null>} AdminCap object ID or null
  */
-async function find_admin_cap(site_id, address, client, package_id) {
-  const admin_cap_type = `${package_id}::site::SiteAdminCap`
+async function find_admin_cap(site_id, address, client, original_package_id) {
+  const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
   const admin_caps = await client.getOwnedObjects({
     owner: address,
     filter: {
@@ -198,11 +198,18 @@ export async function domain_add(domain, options = {}) {
     // Get network and wallet
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = VERSUI_PACKAGE_IDS[network]
+    const package_id = get_versui_package_id(network)
+    const original_package_id = get_original_package_id(network)
     const registry_id = DOMAIN_REGISTRY_IDS[network]
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
+    }
+
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+      )
     }
 
     if (!registry_id) {
@@ -221,7 +228,7 @@ export async function domain_add(domain, options = {}) {
     if (!site_id) {
       // List user's sites and let them choose
       spinner.start('Finding your sites...')
-      const admin_cap_type = `${package_id}::site::SiteAdminCap`
+      const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
       const admin_caps = await client.getOwnedObjects({
         owner: address,
         filter: { StructType: admin_cap_type },
@@ -279,7 +286,7 @@ export async function domain_add(domain, options = {}) {
       site_id,
       address,
       client,
-      package_id,
+      original_package_id,
     )
     if (!admin_cap_id) {
       spinner.fail('AdminCap not found')
@@ -352,11 +359,18 @@ export async function domain_remove(domain, options = {}) {
     // Get network and wallet
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = VERSUI_PACKAGE_IDS[network]
+    const package_id = get_versui_package_id(network)
+    const original_package_id = get_original_package_id(network)
     const registry_id = DOMAIN_REGISTRY_IDS[network]
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
+    }
+
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+      )
     }
 
     if (!registry_id) {
@@ -375,7 +389,7 @@ export async function domain_remove(domain, options = {}) {
     if (!site_id) {
       // List user's sites and let them choose
       spinner.start('Finding your sites...')
-      const admin_cap_type = `${package_id}::site::SiteAdminCap`
+      const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
       const admin_caps = await client.getOwnedObjects({
         owner: address,
         filter: { StructType: admin_cap_type },
@@ -431,7 +445,7 @@ export async function domain_remove(domain, options = {}) {
       site_id,
       address,
       client,
-      package_id,
+      original_package_id,
     )
     if (!admin_cap_id) {
       spinner.fail('AdminCap not found')
@@ -492,10 +506,17 @@ export async function domain_list(options = {}) {
     // Get network and wallet
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = VERSUI_PACKAGE_IDS[network]
+    const package_id = get_versui_package_id(network)
+    const original_package_id = get_original_package_id(network)
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
+    }
+
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+      )
     }
 
     // Create Sui client
@@ -505,7 +526,7 @@ export async function domain_list(options = {}) {
 
     // Get user's sites first
     spinner.start('Finding your sites...')
-    const admin_cap_type = `${package_id}::site::SiteAdminCap`
+    const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: { StructType: admin_cap_type },
