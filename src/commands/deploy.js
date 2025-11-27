@@ -1,5 +1,5 @@
 import { existsSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
-import { execSync, spawn } from 'node:child_process'
+import { spawnSync, spawn } from 'node:child_process'
 import { join, relative } from 'node:path'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
@@ -26,6 +26,7 @@ import {
   normalize_suins_name,
 } from '../lib/suins.js'
 import { detect_service_worker, generate_sw_snippet } from '../lib/sw.js'
+import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
 
 import { build_files_metadata } from './deploy/file-metadata.js'
 import { format_bytes, format_wallet_address } from './deploy/formatting.js'
@@ -41,10 +42,6 @@ import {
 } from './deploy/validate.js'
 import { get_epoch_info_with_fallback } from './deploy/walrus-info.js'
 
-const VERSUI_PACKAGE_IDS = {
-  testnet: '0x1aa91fe1bdfb5f156ad2790173f955443f7b67004ea3171f49c12eb12ca36568',
-  mainnet: null, // TODO: Add mainnet package ID when deployed
-}
 const versui_gradient = gradient(['#00d4ff', '#00ffd1', '#7c3aed'])
 
 // Spinner frames for animated loading indicator
@@ -179,10 +176,12 @@ function finish_display() {
 
 function get_sui_active_address() {
   try {
-    return execSync('sui client active-address', {
+    const result = spawnSync('sui', ['client', 'active-address'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim()
+    })
+    if (result.status !== 0) return null
+    return result.stdout.trim()
   } catch {
     return null
   }
@@ -232,11 +231,12 @@ function run_command_async(cmd, args, spawn_fn = spawn) {
 
 async function get_walrus_price_estimate(size_bytes, epochs) {
   try {
-    const output = execSync('walrus info price --json', {
+    const result = spawnSync('walrus', ['info', 'price', '--json'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     })
-    const price_info = JSON.parse(output)
+    if (result.status !== 0) return null
+    const price_info = JSON.parse(result.stdout)
     const encoding = price_info.encodingDependentPriceInfo?.[0] || {}
     const metadata_price = encoding.metadataPrice || 9300000
     const marginal_price = encoding.marginalPrice || 900000
@@ -790,10 +790,17 @@ export async function deploy(dir, options = {}) {
         const tx_bytes = await result.transaction.build({ client: sui_client })
         const tx_base64 = toBase64(tx_bytes)
 
-        execSync(`sui client serialized-tx ${tx_base64} --json`, {
-          encoding: 'utf8',
-          stdio: ['inherit', 'pipe', 'pipe'],
-        })
+        const sui_result = spawnSync(
+          'sui',
+          ['client', 'serialized-tx', tx_base64, '--json'],
+          {
+            encoding: 'utf8',
+            stdio: ['inherit', 'pipe', 'pipe'],
+          },
+        )
+        if (sui_result.status !== 0) {
+          throw new Error(sui_result.stderr || 'Command failed')
+        }
         return true
       } catch (err) {
         console.log(
@@ -915,8 +922,8 @@ async function deploy_json(dir, options) {
   // Minimal JSON-only flow for scripts
   const { network, epochs, name: cli_site_name = null } = options
 
-  execSync('which walrus', { stdio: 'pipe' })
-  execSync('which sui', { stdio: 'pipe' })
+  spawnSync('which', ['walrus'], { stdio: 'pipe' })
+  spawnSync('which', ['sui'], { stdio: 'pipe' })
 
   const wallet = get_sui_active_address()
   if (!wallet) throw new Error('No wallet')
@@ -951,18 +958,23 @@ async function deploy_json(dir, options) {
       size: statSync(fp).size,
       content_type: get_content_type(fp),
     }
-    // Build --blobs args with JSON format: {"path":"...", "identifier":"..."}
+    // Build blob specs (as separate arguments, NOT quoted strings)
     const blob_spec = JSON.stringify({ path: fp, identifier: rel })
-    blobs_args.push(`'${blob_spec}'`)
+    blobs_args.push(blob_spec)
   }
 
-  const walrus_output = execSync(
-    `walrus store-quilt --blobs ${blobs_args.join(' ')} --epochs ${epochs} --json`,
+  const walrus_result = spawnSync(
+    'walrus',
+    ['store-quilt', '--blobs', ...blobs_args, '--epochs', String(epochs), '--json'],
     {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     },
   )
+  if (walrus_result.status !== 0) {
+    throw new Error(walrus_result.stderr || 'Walrus command failed')
+  }
+  const walrus_output = walrus_result.stdout
   const quilt = JSON.parse(walrus_output)
   const blob_store = quilt.blobStoreResult
   const blob_id =
@@ -986,18 +998,25 @@ async function deploy_json(dir, options) {
   // create_site returns AdminCap to sender, creates shared Site
   tx1.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx1.pure.string(site_name)],
+    arguments: [tx1.pure.string(site_name), tx1.pure.string('')],
   })
 
   const tx1_bytes = await tx1.build({ client: sui_client })
   const tx1_base64 = toBase64(tx1_bytes)
 
   // Execute transaction 1 (sui client auto-signs and executes)
-  const tx1_output = execSync(`sui client serialized-tx ${tx1_base64} --json`, {
-    encoding: 'utf8',
-    stdio: ['inherit', 'pipe', 'pipe'],
-  })
-  const tx1_result = JSON.parse(tx1_output)
+  const tx1_sui_result = spawnSync(
+    'sui',
+    ['client', 'serialized-tx', tx1_base64, '--json'],
+    {
+      encoding: 'utf8',
+      stdio: ['inherit', 'pipe', 'pipe'],
+    },
+  )
+  if (tx1_sui_result.status !== 0) {
+    throw new Error(tx1_sui_result.stderr || 'Transaction 1 failed')
+  }
+  const tx1_result = JSON.parse(tx1_sui_result.stdout)
 
   // Extract Site ID and AdminCap ID from transaction effects
   const site_obj = tx1_result?.objectChanges?.find(
@@ -1053,11 +1072,18 @@ async function deploy_json(dir, options) {
   const tx2_base64 = toBase64(tx2_bytes)
 
   // Execute transaction 2 (sui client auto-signs and executes)
-  const tx2_output = execSync(`sui client serialized-tx ${tx2_base64} --json`, {
-    encoding: 'utf8',
-    stdio: ['inherit', 'pipe', 'pipe'],
-  })
-  const tx2_result = JSON.parse(tx2_output)
+  const tx2_sui_result = spawnSync(
+    'sui',
+    ['client', 'serialized-tx', tx2_base64, '--json'],
+    {
+      encoding: 'utf8',
+      stdio: ['inherit', 'pipe', 'pipe'],
+    },
+  )
+  if (tx2_sui_result.status !== 0) {
+    throw new Error(tx2_sui_result.stderr || 'Transaction 2 failed')
+  }
+  const tx2_result = JSON.parse(tx2_sui_result.stdout)
 
   const subdomain = encode_base36(site_id)
   const gateway_host = network === 'mainnet' ? 'walrus.site' : 'walrus.site'

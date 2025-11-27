@@ -8,14 +8,10 @@ import chalk from 'chalk'
 import ora from 'ora'
 
 import { scan_directory } from '../lib/files.js'
+import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
 
 import { validate_directory, check_prerequisites } from './deploy/validate.js'
 import { build_files_metadata } from './deploy/file-metadata.js'
-
-const VERSUI_PACKAGE_IDS = {
-  testnet: '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36',
-  mainnet: null,
-}
 
 /**
  * Get active wallet address from Sui CLI

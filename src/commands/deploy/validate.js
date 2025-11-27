@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 
 /**
  * Validates that a directory exists and is accessible
@@ -20,8 +20,11 @@ export function validate_directory(dir) {
  */
 export function has_cli(command) {
   try {
-    execSync(`which ${command}`, { stdio: 'pipe' })
-    return true
+    const result = spawnSync('which', [command], {
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    })
+    return result.status === 0
   } catch {
     return false
   }

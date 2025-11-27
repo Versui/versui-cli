@@ -1,7 +1,8 @@
 import { Transaction } from '@mysten/sui/transactions'
-import Table from 'cli-table3'
+import chalk from 'chalk'
 
 import { encode_base36 } from './base36.js'
+import { get_versui_package_id } from './env.js'
 
 /**
  * @typedef {Object} TransactionResult
@@ -20,26 +21,33 @@ import { encode_base36 } from './base36.js'
  * @property {Object<string, string>} [headers] - Custom HTTP headers
  */
 
-// Versui package ID on testnet (env var can override for different networks)
-const PACKAGE_ID =
-  process.env.VERSUI_PACKAGE_ID ||
-  '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36'
-
 /**
  * Build a transaction that creates a Site (step 1 of deployment)
  * Returns AdminCap to sender, creates shared Site object
  * @param {string} name - Site name
  * @param {string} sender - Sender address
  * @param {Object} client - Sui client
+ * @param {string} [favicon_url=''] - Favicon URL (optional)
  * @returns {Promise<TransactionResult>} Transaction bytes
  */
-export async function build_create_site_transaction(name, sender, client) {
+export async function build_create_site_transaction(
+  name,
+  sender,
+  client,
+  favicon_url = '',
+  network = 'testnet',
+) {
+  const package_id = get_versui_package_id(network)
+  if (!package_id) {
+    throw new Error(`Versui package not deployed on ${network}`)
+  }
+
   const tx = new Transaction()
 
   // Call create_site (returns AdminCap to sender, shares Site)
   tx.moveCall({
-    target: `${PACKAGE_ID}::site::create_site`,
-    arguments: [tx.pure.string(name)],
+    target: `${package_id}::site::create_site`,
+    arguments: [tx.pure.string(name), tx.pure.string(favicon_url)],
   })
 
   // Set sender
@@ -72,13 +80,19 @@ export async function build_add_resources_transaction(
   resources,
   sender,
   client,
+  network = 'testnet',
 ) {
+  const package_id = get_versui_package_id(network)
+  if (!package_id) {
+    throw new Error(`Versui package not deployed on ${network}`)
+  }
+
   const tx = new Transaction()
 
   // Add all resources
   for (const resource of resources) {
     tx.moveCall({
-      target: `${PACKAGE_ID}::site::add_resource`,
+      target: `${package_id}::site::add_resource`,
       arguments: [
         tx.object(admin_cap_id), // AdminCap reference (owned object)
         tx.sharedObjectRef({
@@ -127,13 +141,19 @@ export async function build_update_transaction(
   resources,
   sender,
   client,
+  network = 'testnet',
 ) {
+  const package_id = get_versui_package_id(network)
+  if (!package_id) {
+    throw new Error(`Versui package not deployed on ${network}`)
+  }
+
   const tx = new Transaction()
 
   // Update all resources
   for (const resource of resources) {
     tx.moveCall({
-      target: `${PACKAGE_ID}::site::update_resource`,
+      target: `${package_id}::site::update_resource`,
       arguments: [
         tx.object(admin_cap_id), // AdminCap reference (owned object)
         tx.sharedObjectRef({
@@ -258,30 +278,33 @@ export async function query_owned_sites(owner, site_type, client) {
 }
 
 /**
- * Format sites into CLI table
+ * Format sites as bullet points
  * @param {SiteObject[]} sites - Array of sites
  * @param {string} network - Network name
- * @returns {string} Formatted table string
+ * @returns {string} Formatted bullet point string
  */
 export function format_sites_table(sites, network) {
   if (sites.length === 0) {
     return `No deployments found on ${network}.\n\nRun \`versui deploy ./dist\` to get started.`
   }
 
-  const table = new Table({
-    head: ['Site ID', 'Name', 'URL'],
-    colWidths: [70, 25, 55],
-  })
+  const lines = []
 
   for (const site of sites) {
     const subdomain = encode_base36(site.object_id)
     const url = `https://${subdomain}.versui.app`
-    table.push([site.object_id, site.name, url])
+
+    lines.push(`  ${chalk.cyan('•')} ${chalk.bold(site.name)}`)
+    lines.push(`    ${chalk.dim('Site ID:')} ${site.object_id}`)
+    lines.push(`    ${chalk.dim('URL:')} ${chalk.blue(url)}`)
+    lines.push('') // blank line between sites
   }
 
-  const summary = `\n  ${sites.length} site${sites.length === 1 ? '' : 's'} found`
+  lines.push(
+    `  ${chalk.dim(`${sites.length} site${sites.length === 1 ? '' : 's'} found`)}`,
+  )
 
-  return table.toString() + summary
+  return lines.join('\n')
 }
 
 /**
@@ -301,7 +324,13 @@ export async function build_delete_resources_transaction(
   resource_names,
   sender,
   client,
+  network = 'testnet',
 ) {
+  const package_id = get_versui_package_id(network)
+  if (!package_id) {
+    throw new Error(`Versui package not deployed on ${network}`)
+  }
+
   const tx = new Transaction()
 
   // Delete each resource
@@ -311,7 +340,7 @@ export async function build_delete_resources_transaction(
     const path = name_obj.value || String(name_obj)
 
     tx.moveCall({
-      target: `${PACKAGE_ID}::site::delete_resource`,
+      target: `${package_id}::site::delete_resource`,
       arguments: [
         tx.object(admin_cap_id), // AdminCap reference
         tx.sharedObjectRef({
@@ -352,12 +381,18 @@ export async function build_delete_transaction(
   site_version,
   sender,
   client,
+  network = 'testnet',
 ) {
+  const package_id = get_versui_package_id(network)
+  if (!package_id) {
+    throw new Error(`Versui package not deployed on ${network}`)
+  }
+
   const tx = new Transaction()
 
   // Call delete_site (consumes AdminCap and Site)
   tx.moveCall({
-    target: `${PACKAGE_ID}::site::delete_site`,
+    target: `${package_id}::site::delete_site`,
     arguments: [
       tx.object(admin_cap_id), // AdminCap reference (consumed)
       tx.sharedObjectRef({

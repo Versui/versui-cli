@@ -14,12 +14,7 @@ import {
   normalize_suins_name,
   get_suins_client,
 } from '../lib/suins.js'
-
-// Versui package IDs
-const VERSUI_PACKAGE_IDS = {
-  testnet: '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36',
-  mainnet: null,
-}
+import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
 
 /**
  * Get active Sui network from CLI

@@ -1,18 +1,32 @@
-import { execSync, exec } from 'node:child_process'
-import { promisify } from 'node:util'
+import { execSync, spawnSync } from 'node:child_process'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
 
-// eslint-disable-next-line @typescript-eslint/naming-convention
-const execAsync = promisify(exec)
+import { get_versui_package_id } from '../lib/env.js'
 
-// Versui contract addresses (testnet)
-const VERSUI_PACKAGE_ID =
-  process.env.VERSUI_PACKAGE_ID ||
-  '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36'
+/**
+ * Validate Sui object ID format (0x followed by 64 hex chars)
+ * @param {string} id - Object ID to validate
+ * @returns {boolean} True if valid
+ */
+function is_valid_sui_object_id(id) {
+  return /^0x[a-fA-F0-9]{64}$/.test(id)
+}
+
+/**
+ * Validate resource path (must start with /, no shell metacharacters)
+ * @param {string} path - Resource path to validate
+ * @returns {boolean} True if valid
+ */
+function is_valid_resource_path(path) {
+  if (!path.startsWith('/')) return false
+  // Block shell metacharacters: ; | & $ ` \ " ' < > ( ) [ ] { } * ? ! ~
+  if (/[;|&$`\\"'<>()[\]{}*?!~]/.test(path)) return false
+  return true
+}
 
 /**
  * Delete one or more site deployments
@@ -25,6 +39,15 @@ const VERSUI_PACKAGE_ID =
 export async function delete_site(site_ids, options = {}) {
   // Convert single ID to array for uniform processing
   const ids_to_delete = Array.isArray(site_ids) ? site_ids : [site_ids]
+
+  // Validate all site IDs before processing
+  for (const site_id of ids_to_delete) {
+    if (!is_valid_sui_object_id(site_id)) {
+      throw new Error(
+        `Invalid site ID format: ${site_id}. Must be 0x followed by 64 hex characters.`,
+      )
+    }
+  }
 
   try {
     // Get network
@@ -70,7 +93,12 @@ export async function delete_site(site_ids, options = {}) {
 
     // Query all AdminCaps once (shared across all deletions)
     const spinner = ora('Finding AdminCaps...').start()
-    const admin_cap_type = `${VERSUI_PACKAGE_ID}::site::SiteAdminCap`
+    const package_id = get_versui_package_id(network)
+    if (!package_id) {
+      throw new Error(`Versui package not deployed on ${network} yet`)
+    }
+
+    const admin_cap_type = `${package_id}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: {
@@ -111,6 +139,17 @@ export async function delete_site(site_ids, options = {}) {
         console.log(
           chalk.yellow(
             `  ⚠ Skipping ${site_id.slice(0, 10)}... - AdminCap not found (may not own this site)`,
+          ),
+        )
+        console.log('')
+        continue
+      }
+
+      // Validate admin_cap_id format
+      if (!is_valid_sui_object_id(admin_cap_id)) {
+        console.log(
+          chalk.yellow(
+            `  ⚠ Skipping ${site_id.slice(0, 10)}... - Invalid AdminCap ID format`,
           ),
         )
         console.log('')
@@ -170,21 +209,50 @@ export async function delete_site(site_ids, options = {}) {
         for (let i = 0; i < resources_response.data.length; i++) {
           const resource = resources_response.data[i]
           const path = resource.name.value
+
+          // Validate path before processing
+          if (!is_valid_resource_path(path)) {
+            console.log(
+              chalk.yellow(
+                `  ⚠ Skipping invalid resource path: ${path} (contains shell metacharacters or invalid format)`,
+              ),
+            )
+            console.log('')
+            continue
+          }
+
           const del_spinner = ora(
             `Deleting resource ${i + 1}/${resource_count}: ${path}...`,
           ).start()
 
-          const delete_cmd = `sui client call --package ${VERSUI_PACKAGE_ID} --module site --function delete_resource --args ${admin_cap_id} ${site_id} '${path}' --gas-budget 10000000`
-
           try {
-            const { stdout: resources_exec_output } = await execAsync(
-              delete_cmd,
-              {
-                encoding: 'utf-8',
-              },
+            const result = spawnSync(
+              'sui',
+              [
+                'client',
+                'call',
+                '--package',
+                package_id,
+                '--module',
+                'site',
+                '--function',
+                'delete_resource',
+                '--args',
+                admin_cap_id,
+                site_id,
+                path,
+                '--gas-budget',
+                '10000000',
+              ],
+              { encoding: 'utf-8' },
             )
 
-            if (!resources_exec_output.includes('Status: Success')) {
+            if (result.error) {
+              throw result.error
+            }
+
+            const stdout = result.stdout || ''
+            if (!stdout.includes('Status: Success')) {
               del_spinner.fail(`Failed to delete resource: ${path}`)
               console.log('')
               continue
@@ -201,15 +269,35 @@ export async function delete_site(site_ids, options = {}) {
 
       // Delete site using sui client call
       const delete_spinner = ora('Deleting site...').start()
-      const delete_site_cmd = `sui client call --package ${VERSUI_PACKAGE_ID} --module site --function delete_site --args ${admin_cap_id} ${site_id} --gas-budget 10000000`
 
       try {
-        const { stdout: exec_output } = await execAsync(delete_site_cmd, {
-          encoding: 'utf-8',
-        })
+        const result = spawnSync(
+          'sui',
+          [
+            'client',
+            'call',
+            '--package',
+            package_id,
+            '--module',
+            'site',
+            '--function',
+            'delete_site',
+            '--args',
+            admin_cap_id,
+            site_id,
+            '--gas-budget',
+            '10000000',
+          ],
+          { encoding: 'utf-8' },
+        )
 
+        if (result.error) {
+          throw result.error
+        }
+
+        const stdout = result.stdout || ''
         // Check for success
-        if (exec_output.includes('Status: Success')) {
+        if (stdout.includes('Status: Success')) {
           delete_spinner.succeed(
             chalk.green(`✓ Deleted: ${site_id.slice(0, 10)}...`),
           )

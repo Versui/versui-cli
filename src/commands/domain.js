@@ -8,15 +8,11 @@ import ora from 'ora'
 import prompts from 'prompts'
 import Table from 'cli-table3'
 
-// Versui package IDs
-const VERSUI_PACKAGE_IDS = {
-  testnet: '0x546f5b0a5e2d0ecd53dfb80ac41cda779a041e9f1cae376603ddf2646165fe36',
-  mainnet: null, // TODO: Add mainnet package ID when deployed
-}
+import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
 
 // DomainRegistry shared object IDs (deployed via domain_registry.move init)
 const DOMAIN_REGISTRY_IDS = {
-  testnet: '0x02a9848d206767eb7d548786fe9368cf2fbf73ac6a865324948e89f4e5efa6f1',
+  testnet: '0xf649349301a66cb793ed2b00daff426b458d200bd987e20c73b0b7a9c907cc50',
   mainnet: null,
 }
 
@@ -57,6 +53,42 @@ function get_active_address() {
       'Could not get active wallet address. Run: sui client active-address',
     )
   }
+}
+
+/**
+ * Validate resource path format (used for blockchain paths)
+ * @param {string} path - Path to validate
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validate_resource_path(path) {
+  if (!path || typeof path !== 'string') {
+    return { valid: false, error: 'Path cannot be empty' }
+  }
+
+  // Must start with '/'
+  if (!path.startsWith('/')) {
+    return { valid: false, error: 'Path must start with /' }
+  }
+
+  // Max length 1024
+  if (path.length > 1024) {
+    return { valid: false, error: 'Path exceeds maximum length of 1024' }
+  }
+
+  // No path traversal sequences
+  if (path.includes('../') || path.includes('..\\')) {
+    return { valid: false, error: 'Path contains invalid traversal sequence' }
+  }
+
+  // Only allowed characters: alphanumeric, '/', '-', '_', '.'
+  if (!/^[a-zA-Z0-9/_.-]+$/.test(path)) {
+    return {
+      valid: false,
+      error: 'Path contains invalid characters (only alphanumeric, /, -, _, . allowed)',
+    }
+  }
+
+  return { valid: true }
 }
 
 /**
@@ -104,6 +136,11 @@ function validate_domain_format(domain) {
       valid: false,
       error: 'Punycode (internationalized) domains are not allowed',
     }
+  }
+
+  // Security: Validate against path traversal
+  if (domain.includes('../') || domain.includes('..\\')) {
+    return { valid: false, error: 'Domain contains invalid path traversal' }
   }
 
   return { valid: true }
