@@ -23,7 +23,7 @@ const VERSUI_PACKAGE_IDS = {
 
 /**
  * Get active Sui network from CLI
- * @returns {string} Network name (testnet|mainnet)
+ * @returns {'mainnet' | 'testnet'} Network name (testnet|mainnet)
  */
 function get_active_network() {
   try {
@@ -31,7 +31,7 @@ function get_active_network() {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'ignore'],
     })
-    return output.trim()
+    return /** @type {'mainnet' | 'testnet'} */ (output.trim())
   } catch {
     throw new Error(
       'Could not determine active Sui network. Run: sui client active-env',
@@ -112,7 +112,7 @@ async function get_user_sites(address, client, package_id) {
  * @param {string} name - SuiNS name (e.g., "mysite.sui" or "@mysite")
  * @param {Object} options - Command options
  * @param {string} [options.site] - Site object ID
- * @param {string} [options.network] - Network (testnet|mainnet)
+ * @param {'mainnet' | 'testnet'} [options.network] - Network (testnet|mainnet)
  */
 export async function suins_add(name, options = {}) {
   const spinner = ora()
@@ -243,7 +243,7 @@ export async function suins_add(name, options = {}) {
 /**
  * List all owned SuiNS names with linked/unlinked status
  * @param {Object} options - Command options
- * @param {string} [options.network] - Network (testnet|mainnet)
+ * @param {'mainnet' | 'testnet'} [options.network] - Network (testnet|mainnet)
  */
 export async function suins_list(options = {}) {
   const spinner = ora()
