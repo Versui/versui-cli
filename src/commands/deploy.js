@@ -376,14 +376,16 @@ export async function deploy(dir, options = {}) {
     package_json,
   })
 
-  // If no name found and interactive mode, prompt for it
-  if (site_name === 'Versui Site' && !auto_yes) {
+  // Prompt for name if NOT in .versui config and interactive mode
+  // (Even if package.json has a name, we should prompt to confirm/change)
+  const has_stored_name = versui_config?.name && versui_config.name.trim().length > 0
+  if (!has_stored_name && !auto_yes && !cli_site_name) {
     console.log('')
     const response = await prompts({
       type: 'text',
       name: 'site_name',
       message: 'Site name:',
-      initial: 'Versui Site',
+      initial: site_name, // Use resolved name as initial value
     })
 
     if (response.site_name && response.site_name.trim()) {

@@ -21,14 +21,34 @@ function sanitize_ignore_pattern(pattern) {
 }
 
 function read_ignore_patterns(project_dir) {
-  const ignore_file = join(project_dir, '.versuignore')
-  if (!existsSync(ignore_file)) return []
-  return readFileSync(ignore_file, 'utf-8')
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith('#'))
-    .map(sanitize_ignore_pattern)
-    .filter(p => p !== null)
+  const patterns = []
+
+  // Check for .versuiignore first - if exists, use ONLY that
+  const versuignore_file = join(project_dir, '.versuignore')
+  if (existsSync(versuignore_file)) {
+    const versuignore_patterns = readFileSync(versuignore_file, 'utf-8')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'))
+      .map(sanitize_ignore_pattern)
+      .filter(p => p !== null)
+    patterns.push(...versuignore_patterns)
+    return patterns // Early return - don't check .gitignore
+  }
+
+  // Fall back to .gitignore only if .versuiignore doesn't exist
+  const gitignore_file = join(project_dir, '.gitignore')
+  if (existsSync(gitignore_file)) {
+    const gitignore_patterns = readFileSync(gitignore_file, 'utf-8')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'))
+      .map(sanitize_ignore_pattern)
+      .filter(p => p !== null)
+    patterns.push(...gitignore_patterns)
+  }
+
+  return patterns
 }
 
 function should_ignore(file_path, patterns) {

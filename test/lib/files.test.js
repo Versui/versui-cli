@@ -188,4 +188,86 @@ describe('scan_directory', () => {
 
     rmSync(parent_dir, { recursive: true })
   })
+
+  test('should respect .gitignore patterns', () => {
+    const parent_dir = mkdtempSync(join(tmpdir(), 'versui-test-'))
+    const dist_dir = join(parent_dir, 'dist')
+    mkdirSync(dist_dir)
+
+    writeFileSync(join(parent_dir, '.gitignore'), 'node_modules\n*.log')
+    writeFileSync(join(dist_dir, 'keep.txt'), 'keep')
+    writeFileSync(join(dist_dir, 'debug.log'), 'log')
+    mkdirSync(join(dist_dir, 'node_modules'))
+    writeFileSync(join(dist_dir, 'node_modules', 'package.json'), '{}')
+
+    const result = scan_directory(dist_dir, dist_dir)
+    // Should only find keep.txt (not debug.log or node_modules/*)
+    assert.strictEqual(result.length, 1)
+    assert.ok(result.some(p => p.endsWith('keep.txt')))
+
+    rmSync(parent_dir, { recursive: true })
+  })
+
+  test('should merge .gitignore and .versuignore patterns', () => {
+    const parent_dir = mkdtempSync(join(tmpdir(), 'versui-test-'))
+    const dist_dir = join(parent_dir, 'dist')
+    mkdirSync(dist_dir)
+
+    // .gitignore excludes *.log
+    writeFileSync(join(parent_dir, '.gitignore'), '*.log')
+    // .versuignore excludes node_modules
+    writeFileSync(join(parent_dir, '.versuignore'), 'node_modules')
+
+    writeFileSync(join(dist_dir, 'keep.txt'), 'keep')
+    writeFileSync(join(dist_dir, 'debug.log'), 'log')
+    mkdirSync(join(dist_dir, 'node_modules'))
+    writeFileSync(join(dist_dir, 'node_modules', 'package.json'), '{}')
+
+    const result = scan_directory(dist_dir, dist_dir)
+    // Should only find keep.txt (both patterns applied)
+    assert.strictEqual(result.length, 1)
+    assert.ok(result.some(p => p.endsWith('keep.txt')))
+    assert.ok(!result.some(p => p.endsWith('debug.log')))
+    assert.ok(!result.some(p => p.includes('node_modules')))
+
+    rmSync(parent_dir, { recursive: true })
+  })
+
+  test('should work with only .gitignore present', () => {
+    const parent_dir = mkdtempSync(join(tmpdir(), 'versui-test-'))
+    const dist_dir = join(parent_dir, 'dist')
+    mkdirSync(dist_dir)
+
+    writeFileSync(join(parent_dir, '.gitignore'), 'build\n*.tmp')
+    writeFileSync(join(dist_dir, 'keep.txt'), 'keep')
+    writeFileSync(join(dist_dir, 'temp.tmp'), 'tmp')
+    mkdirSync(join(dist_dir, 'build'))
+    writeFileSync(join(dist_dir, 'build', 'output.js'), 'js')
+
+    const result = scan_directory(dist_dir, dist_dir)
+    // Should only find keep.txt
+    assert.strictEqual(result.length, 1)
+    assert.ok(result.some(p => p.endsWith('keep.txt')))
+
+    rmSync(parent_dir, { recursive: true })
+  })
+
+  test('should ignore comments in .gitignore', () => {
+    const parent_dir = mkdtempSync(join(tmpdir(), 'versui-test-'))
+    const dist_dir = join(parent_dir, 'dist')
+    mkdirSync(dist_dir)
+
+    writeFileSync(
+      join(parent_dir, '.gitignore'),
+      '# This is a comment\n*.log\n# Another comment\nnode_modules',
+    )
+    writeFileSync(join(dist_dir, 'keep.txt'), 'keep')
+    writeFileSync(join(dist_dir, 'debug.log'), 'log')
+
+    const result = scan_directory(dist_dir, dist_dir)
+    assert.strictEqual(result.length, 1) // Only keep.txt
+    assert.ok(!result.some(p => p.endsWith('debug.log')))
+
+    rmSync(parent_dir, { recursive: true })
+  })
 })

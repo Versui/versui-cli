@@ -4,7 +4,7 @@
  */
 
 const V10_PACKAGE_ID =
-  '0x33ae55f9781df0d89a9b16b091daa8c8ee826638caca2e68604b1647fd0e84e2'
+  '0x9922ed554edda60ee0757de6bcc4662df3eda9a918e2f108e0c06a6ca2934d44'
 
 /**
  * Validates Sui package ID format
