@@ -36,8 +36,14 @@ function get_validated_package_id(env_var, default_value) {
  * Only uses env var if it matches valid package ID format
  */
 export const VERSUI_PACKAGE_IDS = {
-  testnet: get_validated_package_id(process.env.VERSUI_PACKAGE_ID_TESTNET, V9_PACKAGE_ID),
-  mainnet: get_validated_package_id(process.env.VERSUI_PACKAGE_ID_MAINNET, null),
+  testnet: get_validated_package_id(
+    process.env.VERSUI_PACKAGE_ID_TESTNET,
+    V9_PACKAGE_ID,
+  ),
+  mainnet: get_validated_package_id(
+    process.env.VERSUI_PACKAGE_ID_MAINNET,
+    null,
+  ),
 }
 
 /**
