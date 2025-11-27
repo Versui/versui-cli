@@ -131,7 +131,7 @@ export async function suins_add(name, options = {}) {
     })
     const suins_client = get_suins_client({
       client: sui_client,
-      network: /** @type {'mainnet' | 'testnet'} */ (network),
+      network,
     })
 
     const normalized = normalize_suins_name(name)
@@ -262,14 +262,14 @@ export async function suins_list(options = {}) {
     })
     const suins_client = get_suins_client({
       client: sui_client,
-      network: /** @type {'mainnet' | 'testnet'} */ (network),
+      network,
     })
 
     // Get owned SuiNS names
     spinner.start('Finding your SuiNS names...')
     const names = await get_owned_suins_names(address, {
       sui_client,
-      network: /** @type {'mainnet' | 'testnet'} */ (network),
+      network,
     })
 
     if (names.length === 0) {
