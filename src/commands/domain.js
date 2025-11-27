@@ -56,42 +56,6 @@ function get_active_address() {
 }
 
 /**
- * Validate resource path format (used for blockchain paths)
- * @param {string} path - Path to validate
- * @returns {{ valid: boolean, error?: string }}
- */
-function validate_resource_path(path) {
-  if (!path || typeof path !== 'string') {
-    return { valid: false, error: 'Path cannot be empty' }
-  }
-
-  // Must start with '/'
-  if (!path.startsWith('/')) {
-    return { valid: false, error: 'Path must start with /' }
-  }
-
-  // Max length 1024
-  if (path.length > 1024) {
-    return { valid: false, error: 'Path exceeds maximum length of 1024' }
-  }
-
-  // No path traversal sequences
-  if (path.includes('../') || path.includes('..\\')) {
-    return { valid: false, error: 'Path contains invalid traversal sequence' }
-  }
-
-  // Only allowed characters: alphanumeric, '/', '-', '_', '.'
-  if (!/^[a-zA-Z0-9/_.-]+$/.test(path)) {
-    return {
-      valid: false,
-      error: 'Path contains invalid characters (only alphanumeric, /, -, _, . allowed)',
-    }
-  }
-
-  return { valid: true }
-}
-
-/**
  * Validate domain format (matches Move contract validation)
  * @param {string} domain - Domain to validate
  * @returns {{ valid: boolean, error?: string }}
