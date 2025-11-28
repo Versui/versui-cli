@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
@@ -8,6 +8,44 @@ import ora from 'ora'
 
 import { get_versui_package_id, get_versui_registry_id } from '../lib/env.js'
 import { get_site_id_by_name } from '../lib/sui.js'
+
+/**
+ * Execute sui client command asynchronously
+ * @param {string[]} args - Command arguments
+ * @returns {Promise<{stdout: string, stderr: string, success: boolean}>}
+ */
+function execute_sui_command(args) {
+  return new Promise(resolve => {
+    const proc = spawn('sui', args, { encoding: 'utf-8' })
+
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout?.on('data', data => {
+      stdout += data
+    })
+
+    proc.stderr?.on('data', data => {
+      stderr += data
+    })
+
+    proc.on('close', code => {
+      resolve({
+        stdout,
+        stderr,
+        success: code === 0 && stdout.includes('Status: Success'),
+      })
+    })
+
+    proc.on('error', error => {
+      resolve({
+        stdout,
+        stderr: stderr + error.message,
+        success: false,
+      })
+    })
+  })
+}
 
 /**
  * Validate Sui object ID format (0x followed by 64 hex chars)
@@ -355,37 +393,27 @@ export async function delete_site(site_identifiers, options = {}) {
                 1_000_000 + batch.length * 1_000_000,
               )
 
-              const result = spawnSync(
-                'sui',
-                [
-                  'client',
-                  'call',
-                  '--package',
-                  package_id,
-                  '--module',
-                  'site',
-                  '--function',
-                  'delete_resources_batch',
-                  '--args',
-                  admin_cap_id,
-                  site_id,
-                  JSON.stringify(batch),
-                  '--gas-budget',
-                  gas_budget.toString(),
-                ],
-                { encoding: 'utf-8' },
-              )
+              const result = await execute_sui_command([
+                'client',
+                'call',
+                '--package',
+                package_id,
+                '--module',
+                'site',
+                '--function',
+                'delete_resources_batch',
+                '--args',
+                admin_cap_id,
+                site_id,
+                JSON.stringify(batch),
+                '--gas-budget',
+                gas_budget.toString(),
+              ])
 
-              if (result.error) {
-                throw result.error
-              }
-
-              const stdout = result.stdout || ''
-              const stderr = result.stderr || ''
-
-              if (!stdout.includes('Status: Success')) {
+              if (!result.success) {
                 // Extract Move error from stderr
-                const error_detail = stderr.trim() || stdout.trim()
+                const error_detail =
+                  result.stderr.trim() || result.stdout.trim()
                 del_spinner.fail(
                   `Failed to delete batch ${i + 1}/${total_batches}`,
                 )
@@ -444,41 +472,30 @@ export async function delete_site(site_identifiers, options = {}) {
       const delete_spinner = ora('Deleting site...').start()
 
       try {
-        const result = spawnSync(
-          'sui',
-          [
-            'client',
-            'call',
-            '--package',
-            package_id,
-            '--module',
-            'site',
-            '--function',
-            'delete_site',
-            '--args',
-            admin_cap_id,
-            site_id,
-            '--gas-budget',
-            '10000000',
-          ],
-          { encoding: 'utf-8' },
-        )
-
-        if (result.error) {
-          throw result.error
-        }
-
-        const stdout = result.stdout || ''
-        const stderr = result.stderr || ''
+        const result = await execute_sui_command([
+          'client',
+          'call',
+          '--package',
+          package_id,
+          '--module',
+          'site',
+          '--function',
+          'delete_site',
+          '--args',
+          admin_cap_id,
+          site_id,
+          '--gas-budget',
+          '10000000',
+        ])
 
         // Check for success BEFORE showing success message
-        if (stdout.includes('Status: Success')) {
+        if (result.success) {
           delete_spinner.succeed(
             chalk.green(`✓ Deleted: ${site_id.slice(0, 10)}...`),
           )
         } else {
           // Extract Move error from stderr
-          const error_detail = stderr.trim() || stdout.trim()
+          const error_detail = result.stderr.trim() || result.stdout.trim()
           delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
           console.log(chalk.yellow(`  Error details:`))
           console.log(chalk.dim(`  ${error_detail}`))
