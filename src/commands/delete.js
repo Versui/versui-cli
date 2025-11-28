@@ -5,11 +5,7 @@ import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
 
-import {
-  get_versui_package_id,
-  get_original_package_id,
-  get_versui_registry_id,
-} from '../lib/env.js'
+import { get_versui_package_id, get_versui_registry_id } from '../lib/env.js'
 import { get_site_id_by_name } from '../lib/sui.js'
 
 /**
@@ -58,7 +54,7 @@ export async function delete_site(site_identifiers, options = {}) {
 
   // Resolve all identifiers to site IDs
   const ids_to_delete = []
-  let lookup_spinner = ora('Resolving site identifiers...').start()
+  const lookup_spinner = ora('Resolving site identifiers...').start()
 
   for (const identifier of identifiers) {
     // If it looks like a Sui object ID, use directly
@@ -139,21 +135,13 @@ export async function delete_site(site_identifiers, options = {}) {
     // Query all AdminCaps once (shared across all deletions)
     const spinner = ora('Finding AdminCaps...').start()
 
-    // Use original package ID for type filtering (objects still have old package in type)
-    const original_package_id = get_original_package_id(network)
-    if (!original_package_id) {
-      throw new Error(
-        `Original Versui package not found on ${network}. Cannot query existing objects.`,
-      )
-    }
-
-    // Use new package ID for function calls
+    // Use V10 package ID for both querying and function calls
     const package_id = get_versui_package_id(network)
     if (!package_id) {
       throw new Error(`Versui package not deployed on ${network} yet`)
     }
 
-    const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
+    const admin_cap_type = `${package_id}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: {
@@ -293,7 +281,10 @@ export async function delete_site(site_identifiers, options = {}) {
 
           try {
             // Dynamic gas budget: 1M base + 1M per resource (min 50M)
-            const gas_budget = Math.max(50_000_000, 1_000_000 + paths_to_delete.length * 1_000_000)
+            const gas_budget = Math.max(
+              50_000_000,
+              1_000_000 + paths_to_delete.length * 1_000_000,
+            )
 
             const result = spawnSync(
               'sui',

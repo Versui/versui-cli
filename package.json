@@ -14,7 +14,7 @@
     "lint": "eslint . && prettier . --check && npm run typecheck",
     "typecheck": "tsc --build",
     "format": "prettier . --write && eslint . --fix",
-    "test": "NODE_NO_WARNINGS=1 node --test test/**/*.test.js",
+    "test": "NODE_NO_WARNINGS=1 node --test",
     "test:coverage": "c8 --reporter=text --reporter=html --reporter=lcov npm test"
   },
   "repository": {

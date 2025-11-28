@@ -26,7 +26,7 @@ import {
   normalize_suins_name,
 } from '../lib/suins.js'
 import { detect_service_worker, generate_sw_snippet } from '../lib/sw.js'
-import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
+import { VERSUI_PACKAGE_IDS, get_versui_registry_id } from '../lib/env.js'
 
 import { build_files_metadata } from './deploy/file-metadata.js'
 import { format_bytes, format_wallet_address } from './deploy/formatting.js'
@@ -285,8 +285,10 @@ async function get_sui_gas_estimate(tx_bytes, sui_client) {
 
 // WAL coin type addresses by network
 const WAL_COIN_TYPES = {
-  testnet: '0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL',
-  mainnet: '0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL',
+  testnet:
+    '0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL',
+  mainnet:
+    '0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL',
 }
 
 /**
@@ -631,8 +633,14 @@ export async function deploy(dir, options = {}) {
       throw new Error(`Versui package not deployed on ${network} yet`)
     }
 
+    const versui_object_id = get_versui_registry_id(network)
+    if (!versui_object_id) {
+      throw new Error(`Versui registry not deployed on ${network} yet`)
+    }
+
     const tx1 = create_site_transaction({
       package_id,
+      versui_object_id,
       wallet: state.wallet,
       site_name,
     })
@@ -1079,7 +1087,7 @@ async function deploy_json(dir, options) {
   // create_site returns AdminCap to sender, creates shared Site
   tx1.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx1.pure.string(site_name), tx1.pure.string('')],
+    arguments: [tx1.pure.string(site_name)],
   })
 
   const tx1_bytes = await tx1.build({ client: sui_client })

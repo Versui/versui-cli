@@ -27,7 +27,7 @@ export function generate_bootstrap(site_name, aggregators, resource_map) {
 </head>
 <body>
 <div class="s" id="l"></div>
-<div class="e" id="err" style="display:none"><h1>Site Awaiting Renewal</h1><p>This site's storage has expired on Walrus. It will automatically load once the administrator renews it.</p><div class="retry"><div class="s"></div><span>Checking for renewal...</span></div></div>
+<div class="e" id="err" style="display:none"><h1>Site Storage Expired</h1><p>This site's storage has expired on Walrus. It will automatically load once the administrator restores it.</p><div class="retry"><div class="s"></div><span>Retrying...</span></div></div>
 <div class="nosw" id="nosw" style="display:none">Your browser doesn't support Service Workers.<br>Please use a modern browser to view this site.</div>
 <script>
 (()=>{
