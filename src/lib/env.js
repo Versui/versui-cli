@@ -4,7 +4,7 @@
  */
 
 const V10_PACKAGE_ID =
-  '0x884d7f62ca6c8945c0fde235dcaa0b96cc3dfbd6be44a73a33372b0c1b19094c'
+  '0x2489609d5e6b754634d4ca892ab259222482f31596a13530fcc8110b5b2461cb'
 
 /**
  * Original package ID (V9 and earlier)
@@ -20,7 +20,7 @@ const ORIGINAL_PACKAGE_ID =
 const VERSUI_REGISTRY_IDS = {
   testnet:
     process.env.VERSUI_OBJECT_ID_TESTNET ||
-    '0x4c1259d718fb5b3c0b1cb15bd8f69a7e75b648017547c80c856377a2c783998d',
+    '0x0075af6378f6f8fc34c778693ccc92dcd1a2868157a2932e87f32f80f3ca2c45',
   mainnet: process.env.VERSUI_OBJECT_ID_MAINNET || null,
 }
 
@@ -30,7 +30,7 @@ const VERSUI_REGISTRY_IDS = {
 const DOMAIN_REGISTRY_IDS = {
   testnet:
     process.env.DOMAIN_REGISTRY_ID_TESTNET ||
-    '0x71d0c39b23c5d1930f3314c852b5fbc54b9c19e8e780399c29c5a1a854d2ab57',
+    '0x5a49320853b8bbb22c727ece89f0683684333081fcc7c4a7d28b992f640e4629',
   mainnet: process.env.DOMAIN_REGISTRY_ID_MAINNET || null,
 }
 

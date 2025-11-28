@@ -4,7 +4,7 @@ import { deriveObjectID } from '@mysten/sui/utils'
 import chalk from 'chalk'
 
 import { encode_base36 } from './base36.js'
-import { get_versui_package_id } from './env.js'
+import { get_versui_package_id, get_versui_registry_id } from './env.js'
 
 /**
  * @typedef {Object} TransactionResult
@@ -29,14 +29,12 @@ import { get_versui_package_id } from './env.js'
  * @param {string} name - Site name
  * @param {string} sender - Sender address
  * @param {Object} client - Sui client
- * @param {string} [favicon_url=''] - Favicon URL (optional)
  * @returns {Promise<TransactionResult>} Transaction bytes
  */
 export async function build_create_site_transaction(
   name,
   sender,
   client,
-  favicon_url = '',
   network = 'testnet',
 ) {
   const package_id = get_versui_package_id(network)
@@ -44,12 +42,17 @@ export async function build_create_site_transaction(
     throw new Error(`Versui package not deployed on ${network}`)
   }
 
+  const versui_object_id = get_versui_registry_id(network)
+  if (!versui_object_id) {
+    throw new Error(`Versui registry not deployed on ${network}`)
+  }
+
   const tx = new Transaction()
 
   // Call create_site (returns AdminCap to sender, shares Site)
   tx.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx.pure.string(name), tx.pure.string(favicon_url)],
+    arguments: [tx.object(versui_object_id), tx.pure.string(name)],
   })
 
   // Set sender

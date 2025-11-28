@@ -5,7 +5,7 @@ import chalk from 'chalk'
 import ora from 'ora'
 
 import { format_sites_table } from '../lib/sui.js'
-import { get_original_package_id } from '../lib/env.js'
+import { get_versui_package_id } from '../lib/env.js'
 
 /**
  * List deployments
@@ -38,15 +38,15 @@ export async function list(options = {}) {
       isSilent: !process.stdout.isTTY,
     }).start()
 
-    // Use original package ID for type filtering (objects still have old package in type)
-    const original_package_id = get_original_package_id(network)
-    if (!original_package_id) {
+    // Use V10 package ID for querying AdminCaps (created with V10 deploy)
+    const package_id = get_versui_package_id(network)
+    if (!package_id) {
       throw new Error(
-        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+        `Versui package not found on ${network}. Cannot query AdminCaps.`,
       )
     }
 
-    const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
+    const admin_cap_type = `${package_id}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: {
