@@ -566,7 +566,8 @@ describe('command injection fuzz tests', () => {
 
           // sui will fail on invalid tx, but should not execute injected commands
           assert.ok(
-            !result.stdout?.includes('root') && !result.stdout?.includes('uid='),
+            !result.stdout?.includes('root') &&
+              !result.stdout?.includes('uid='),
             'Base64 attacks should not execute commands',
           )
         }
