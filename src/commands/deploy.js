@@ -184,7 +184,7 @@ function render_state(include_header = false) {
 
 function update_display() {
   state.spinner_frame++
-  logUpdate(render_state())
+  logUpdate(render_state(true))
 }
 
 function finish_display() {
@@ -384,9 +384,7 @@ async function confirm_action(
 
   // Clear and redraw after confirmation
   console.clear()
-  console.log('')
-  console.log(render_header())
-  console.log('')
+  update_display()
 
   return true
 }
@@ -559,9 +557,6 @@ export async function deploy(dir, options = {}) {
 
     // Clear screen and show progress tracker
     console.clear()
-    console.log('')
-    console.log(render_header())
-    console.log('')
 
     // Scan files
     state.step = 'scan'
@@ -625,7 +620,7 @@ export async function deploy(dir, options = {}) {
       blob_store?.newlyCreated?.blobObject?.blobId ||
       blob_store?.alreadyCertified?.blobId
     const blob_object_id =
-      blob_store?.newlyCreated?.blobObject?.blobObjectId ||
+      blob_store?.newlyCreated?.blobObject?.id ||
       blob_store?.alreadyCertified?.object
     const quilt_patches = quilt_result.storedQuiltBlobs || []
 
@@ -1087,7 +1082,7 @@ async function deploy_json(dir, options) {
     blob_store?.newlyCreated?.blobObject?.blobId ||
     blob_store?.alreadyCertified?.blobId
   const blob_object_id =
-    blob_store?.newlyCreated?.blobObject?.blobObjectId ||
+    blob_store?.newlyCreated?.blobObject?.id ||
     blob_store?.alreadyCertified?.object
   const patches = quilt.storedQuiltBlobs || []
 

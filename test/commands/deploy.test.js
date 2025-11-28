@@ -297,7 +297,7 @@ describe('upload_to_walrus_with_progress', () => {
         newlyCreated: {
           blobObject: {
             blobId: 'blob123',
-            blobObjectId: 'obj123',
+            id: 'obj123',
           },
         },
       },

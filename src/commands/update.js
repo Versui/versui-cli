@@ -241,7 +241,7 @@ async function upload_files_to_walrus(dir, file_paths, epochs) {
     blob_store?.newlyCreated?.blobObject?.blobId ||
     blob_store?.alreadyCertified?.blobId
   const blob_object_id =
-    blob_store?.newlyCreated?.blobObject?.blobObjectId ||
+    blob_store?.newlyCreated?.blobObject?.id ||
     blob_store?.alreadyCertified?.object
 
   return {
