@@ -1,6 +1,6 @@
 {
   "name": "@versui/cli",
-  "version": "1.7.5",
+  "version": "1.7.6",
   "description": "Deploy static sites to Walrus decentralized storage",
   "type": "module",
   "publishConfig": {
