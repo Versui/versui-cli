@@ -6,7 +6,11 @@ import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
 
-import { get_versui_package_id, get_versui_registry_id } from '../lib/env.js'
+import {
+  get_versui_package_id,
+  get_versui_registry_id,
+  get_original_package_id,
+} from '../lib/env.js'
 import { get_site_id_by_name } from '../lib/sui.js'
 
 /**
@@ -224,13 +228,21 @@ export async function delete_site(site_identifiers, options = {}) {
     // Query all AdminCaps once (shared across all deletions)
     const spinner = ora('Finding AdminCaps...').start()
 
-    // Use V10 package ID for both querying and function calls
+    // Use V10 package ID for function calls
     const package_id = get_versui_package_id(network)
     if (!package_id) {
       throw new Error(`Versui package not deployed on ${network} yet`)
     }
 
-    const admin_cap_type = `${package_id}::site::SiteAdminCap`
+    // Use original package ID for type queries (existing objects have old type)
+    const original_package_id = get_original_package_id(network)
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query AdminCaps.`,
+      )
+    }
+
+    const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: {
