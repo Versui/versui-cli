@@ -383,8 +383,7 @@ async function confirm_action(
     process.exit(0)
   }
 
-  // Clear and redraw after confirmation
-  console.clear()
+  // Resume display after confirmation (don't clear - preserves header)
   update_display()
 
   return true
@@ -600,18 +599,16 @@ export async function deploy(dir, options = {}) {
     )
 
     // Upload to Walrus with progress tracking
-    state.spinner_text = 'Uploading to Walrus...'
     state.upload_progress = 0
-    update_display()
 
     const quilt_result = await upload_to_walrus_with_progress(
       dir,
       epochs,
       (progress, message) => {
         state.upload_progress = progress
-        if (message) {
-          state.spinner_text = `Uploading to Walrus... ${message}`
-        }
+        state.spinner_text = message
+          ? `Uploading to Walrus... ${message}`
+          : 'Uploading to Walrus...'
         update_display()
       },
     )
@@ -796,7 +793,6 @@ export async function deploy(dir, options = {}) {
       initial_shared_version,
       quilt_patches,
       file_metadata,
-      blob_object_id,
       network,
     })
 
@@ -1281,7 +1277,6 @@ async function deploy_json(dir, options) {
         tx2.object(site_id), // Shared Site reference
         tx2.pure.string(full_path),
         tx2.pure.string(patch.quiltPatchId),
-        tx2.pure.id(blob_object_id), // Blob object ID for renewal tracking
         tx2.pure.vector('u8', Array.from(Buffer.from(info.hash, 'hex'))),
         tx2.pure.string(info.content_type),
         tx2.pure.u64(info.size),
