@@ -1,6 +1,7 @@
 import { existsSync, statSync, mkdirSync, writeFileSync } from 'node:fs'
 import { spawnSync, spawn } from 'node:child_process'
 import { join, relative } from 'node:path'
+import * as readline from 'node:readline'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import { Transaction } from '@mysten/sui/transactions'
@@ -48,6 +49,93 @@ const versui_gradient = gradient(['#00d4ff', '#00ffd1', '#7c3aed'])
 // Spinner frames for animated loading indicator
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
+/**
+ * Setup ESC key handler for graceful cancellation
+ * @param {Function} on_cancel - Cleanup function to call before exiting
+ * @returns {Function} Cleanup function to remove listener
+ */
+function setup_esc_handler(on_cancel) {
+  // Enable raw mode to capture keypress events
+  if (process.stdin.isTTY) {
+    readline.emitKeypressEvents(process.stdin)
+    process.stdin.setRawMode(true)
+  }
+
+  const keypress_handler = async (str, key) => {
+    // Check for ESC key (key.name === 'escape' or raw \x1B)
+    if (key && (key.name === 'escape' || str === '\x1B')) {
+      // If transaction in progress, confirm before canceling
+      if (state.transaction_in_progress) {
+        // Disable raw mode temporarily for prompt
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(false)
+        }
+
+        finish_display()
+        console.log('')
+        console.log(
+          chalk.yellow(
+            '  ⚠  A transaction is in progress and may have already been signed.',
+          ),
+        )
+        console.log('')
+
+        const response = await prompts(
+          {
+            type: 'confirm',
+            name: 'confirm_cancel',
+            message: 'Are you sure you want to cancel?',
+            initial: false,
+          },
+          {
+            onCancel: () => {
+              // User pressed ESC again during confirmation - honor it
+              console.log(chalk.yellow('\n  Cancelled.\n'))
+              cleanup_and_exit()
+            },
+          },
+        )
+
+        if (response.confirm_cancel) {
+          console.log(chalk.yellow('\n  Cancelled.\n'))
+          cleanup_and_exit()
+        } else {
+          // Resume operation - re-enable raw mode
+          if (process.stdin.isTTY) {
+            process.stdin.setRawMode(true)
+          }
+        }
+      } else {
+        // No transaction in progress - cancel immediately
+        cleanup_and_exit()
+      }
+    }
+
+    // Handle Ctrl+C as well
+    if (key && key.ctrl && key.name === 'c') {
+      cleanup_and_exit()
+    }
+  }
+
+  const cleanup_and_exit = () => {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false)
+    }
+    process.stdin.removeListener('keypress', keypress_handler)
+    on_cancel()
+  }
+
+  process.stdin.on('keypress', keypress_handler)
+
+  // Return cleanup function
+  return () => {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false)
+    }
+    process.stdin.removeListener('keypress', keypress_handler)
+  }
+}
+
 // State for tracking progress
 const state = {
   dir: null,
@@ -67,6 +155,7 @@ const state = {
   upload_progress: 0,
   spinner_frame: 0,
   show_header: true, // Toggle to prevent header duplication after prompts
+  transaction_in_progress: false, // Track if a transaction is being signed/executed
 }
 
 // format_bytes moved to ./deploy/formatting.js and imported above
@@ -473,6 +562,9 @@ export async function deploy(dir, options = {}) {
     process.exit(0)
   }
 
+  // Setup ESC key handler
+  const cleanup_esc_handler = setup_esc_handler(on_cancel)
+
   try {
     // Prompt network (or default for -y)
     if (!network) {
@@ -731,6 +823,7 @@ export async function deploy(dir, options = {}) {
 
     let tx1_result
     try {
+      state.transaction_in_progress = true // Mark transaction as in progress
       const output = await run_command_async('sui', [
         'client',
         'serialized-tx',
@@ -738,7 +831,9 @@ export async function deploy(dir, options = {}) {
         '--json',
       ])
       tx1_result = JSON.parse(output)
+      state.transaction_in_progress = false // Transaction complete
     } catch (err) {
+      state.transaction_in_progress = false // Reset on error
       // Log orphaned blob for reference (walrus upload succeeded but sui tx failed)
       if (state.blob_id) {
         console.error(
@@ -819,13 +914,16 @@ export async function deploy(dir, options = {}) {
 
     // Execute transaction 2
     try {
+      state.transaction_in_progress = true // Mark transaction as in progress
       await run_command_async('sui', [
         'client',
         'serialized-tx',
         tx2_base64,
         '--json',
       ])
+      state.transaction_in_progress = false // Transaction complete
     } catch (err) {
+      state.transaction_in_progress = false // Reset on error
       throw new Error(`Transaction failed: ${err.stderr || err.message}`)
     }
 
@@ -911,6 +1009,9 @@ export async function deploy(dir, options = {}) {
     // Stop spinner animation
     clearInterval(spinner_interval)
 
+    // Cleanup ESC handler
+    cleanup_esc_handler()
+
     // SuiNS domain linking (after successful deploy)
     let linked_suins_name = null
     const subdomain = encode_base36(site_id)
@@ -933,6 +1034,7 @@ export async function deploy(dir, options = {}) {
         const tx_bytes = await result.transaction.build({ client: sui_client })
         const tx_base64 = toBase64(tx_bytes)
 
+        state.transaction_in_progress = true // Mark transaction as in progress
         const sui_result = spawnSync(
           'sui',
           ['client', 'serialized-tx', tx_base64, '--json'],
@@ -941,11 +1043,13 @@ export async function deploy(dir, options = {}) {
             stdio: ['inherit', 'pipe', 'pipe'],
           },
         )
+        state.transaction_in_progress = false // Transaction complete
         if (sui_result.status !== 0) {
           throw new Error(sui_result.stderr || 'Command failed')
         }
         return true
       } catch (err) {
+        state.transaction_in_progress = false // Reset on error
         console.log(
           chalk.yellow(`  ⚠ Failed to execute SuiNS link: ${err.message}`),
         )
@@ -1055,8 +1159,9 @@ export async function deploy(dir, options = {}) {
     }
     console.log('')
   } catch (error) {
-    // Clean up spinner on error
+    // Clean up spinner and ESC handler on error
     clearInterval(spinner_interval)
+    cleanup_esc_handler()
     throw error
   }
 }
