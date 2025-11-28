@@ -289,21 +289,33 @@ export async function delete_site(site_identifiers, options = {}) {
         continue
       }
 
-      // Query resources (dynamic fields of the Table)
+      // Query ALL resources with pagination (dynamic fields of the Table)
       const res_spinner = ora('Checking site resources...').start()
-      const resources_response = await client.getDynamicFields({
-        parentId: resources_table_id,
-      })
-      const resource_count = resources_response.data.length
+      const all_resources = []
+      let has_next_page = true
+      let cursor = null
+
+      while (has_next_page) {
+        const resources_response = await client.getDynamicFields({
+          parentId: resources_table_id,
+          cursor,
+        })
+        all_resources.push(...resources_response.data)
+        has_next_page = resources_response.hasNextPage
+        cursor = resources_response.nextCursor
+      }
+
+      const resource_count = all_resources.length
       res_spinner.succeed(`Found ${resource_count} resource(s)`)
 
       // If site has resources, delete them first (batch operation)
+      let resources_deleted_successfully = false
       if (resource_count > 0) {
         // Collect all valid resource paths
         const paths_to_delete = []
         const invalid_paths = []
 
-        for (const resource of resources_response.data) {
+        for (const resource of all_resources) {
           const path = /** @type {string} */ (resource.name.value)
 
           if (!is_valid_resource_path(path)) {
@@ -324,65 +336,129 @@ export async function delete_site(site_identifiers, options = {}) {
           console.log('')
         }
 
-        // Delete all resources in one transaction
+        // Delete resources in batches (PTB limit is 1024 commands, use 50 for safety)
         if (paths_to_delete.length > 0) {
-          const del_spinner = ora(
-            `Deleting ${paths_to_delete.length} resource(s) in batch...`,
-          ).start()
+          const batch_size = 50
+          const total_batches = Math.ceil(paths_to_delete.length / batch_size)
+          let total_deleted = 0
 
-          try {
-            // Dynamic gas budget: 1M base + 1M per resource (min 50M)
-            const gas_budget = Math.max(
-              50_000_000,
-              1_000_000 + paths_to_delete.length * 1_000_000,
+          for (let i = 0; i < total_batches; i++) {
+            const batch_start = i * batch_size
+            const batch_end = Math.min(
+              batch_start + batch_size,
+              paths_to_delete.length,
             )
+            const batch = paths_to_delete.slice(batch_start, batch_end)
 
-            const result = spawnSync(
-              'sui',
-              [
-                'client',
-                'call',
-                '--package',
-                package_id,
-                '--module',
-                'site',
-                '--function',
-                'delete_resources_batch',
-                '--args',
-                admin_cap_id,
-                site_id,
-                JSON.stringify(paths_to_delete),
-                '--gas-budget',
-                gas_budget.toString(),
-              ],
-              { encoding: 'utf-8' },
-            )
+            const del_spinner = ora(
+              `Deleting batch ${i + 1}/${total_batches} (${batch.length} resource(s))...`,
+            ).start()
 
-            if (result.error) {
-              throw result.error
-            }
-
-            const stdout = result.stdout || ''
-            const stderr = result.stderr || ''
-
-            if (!stdout.includes('Status: Success')) {
-              // Extract Move error from stderr
-              const error_detail = stderr.trim() || stdout.trim()
-              del_spinner.fail(`Failed to delete resources`)
-              console.log('')
-              console.log(chalk.yellow(`  Error details:`))
-              console.log(chalk.dim(`  ${error_detail}`))
-              console.log('')
-            } else {
-              del_spinner.succeed(
-                `Deleted ${paths_to_delete.length} resource(s) in 1 transaction (gas: ${gas_budget.toLocaleString()})`,
+            try {
+              // Dynamic gas budget: 1M base + 1M per resource (min 50M)
+              const gas_budget = Math.max(
+                50_000_000,
+                1_000_000 + batch.length * 1_000_000,
               )
+
+              const result = spawnSync(
+                'sui',
+                [
+                  'client',
+                  'call',
+                  '--package',
+                  package_id,
+                  '--module',
+                  'site',
+                  '--function',
+                  'delete_resources_batch',
+                  '--args',
+                  admin_cap_id,
+                  site_id,
+                  JSON.stringify(batch),
+                  '--gas-budget',
+                  gas_budget.toString(),
+                ],
+                { encoding: 'utf-8' },
+              )
+
+              if (result.error) {
+                throw result.error
+              }
+
+              const stdout = result.stdout || ''
+              const stderr = result.stderr || ''
+
+              if (!stdout.includes('Status: Success')) {
+                // Extract Move error from stderr
+                const error_detail = stderr.trim() || stdout.trim()
+                del_spinner.fail(
+                  `Failed to delete batch ${i + 1}/${total_batches}`,
+                )
+                console.log('')
+                console.log(chalk.yellow(`  Error details:`))
+                console.log(chalk.dim(`  ${error_detail}`))
+                console.log('')
+                // Don't set resources_deleted_successfully = true, break early
+                break
+              } else {
+                total_deleted += batch.length
+                del_spinner.succeed(
+                  `Deleted batch ${i + 1}/${total_batches} (${batch.length} resource(s), gas: ${gas_budget.toLocaleString()})`,
+                )
+
+                // Only mark as successful if ALL batches completed
+                if (i === total_batches - 1) {
+                  resources_deleted_successfully = true
+                }
+              }
+            } catch (error) {
+              del_spinner.fail(
+                `Failed to delete batch ${i + 1}/${total_batches}: ${error.message}`,
+              )
+              console.log('')
+              // Don't set resources_deleted_successfully = true, break early
+              break
             }
-          } catch (error) {
-            del_spinner.fail(`Failed to delete resources: ${error.message}`)
+          }
+
+          // Report final status
+          if (
+            resources_deleted_successfully &&
+            total_deleted === paths_to_delete.length
+          ) {
+            console.log(
+              chalk.green(
+                `  ✓ Successfully deleted all ${total_deleted} resource(s)`,
+              ),
+            )
+            console.log('')
+          } else if (total_deleted > 0) {
+            console.log(
+              chalk.yellow(
+                `  ⚠ Partially deleted ${total_deleted}/${paths_to_delete.length} resource(s)`,
+              ),
+            )
             console.log('')
           }
+        } else {
+          // No resources to delete, mark as successful
+          resources_deleted_successfully = true
         }
+      } else {
+        // No resources found, mark as successful
+        resources_deleted_successfully = true
+      }
+
+      // Only delete site if resources were successfully deleted (or there were none)
+      if (!resources_deleted_successfully) {
+        console.log(
+          chalk.yellow(
+            `  ⚠ Skipping site deletion - resources were not fully deleted`,
+          ),
+        )
+        console.log('')
+        continue
       }
 
       // Delete site using sui client call
@@ -416,7 +492,7 @@ export async function delete_site(site_identifiers, options = {}) {
         const stdout = result.stdout || ''
         const stderr = result.stderr || ''
 
-        // Check for success
+        // Check for success BEFORE showing success message
         if (stdout.includes('Status: Success')) {
           delete_spinner.succeed(
             chalk.green(`✓ Deleted: ${site_id.slice(0, 10)}...`),
