@@ -72,6 +72,7 @@ program
 
 program
   .command('list')
+  .alias('ls')
   .description('List your deployments')
   .option('--network <network>', 'sui network (testnet, mainnet)')
   .action(list)
