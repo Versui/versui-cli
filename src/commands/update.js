@@ -8,7 +8,11 @@ import chalk from 'chalk'
 import ora from 'ora'
 
 import { scan_directory } from '../lib/files.js'
-import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
+import {
+  get_versui_package_id,
+  get_original_package_id,
+  get_version_object_id,
+} from '../lib/env.js'
 
 import { validate_directory, check_prerequisites } from './deploy/validate.js'
 import { build_files_metadata } from './deploy/file-metadata.js'
@@ -265,6 +269,7 @@ async function upload_files_to_walrus(dir, file_paths, epochs) {
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
  * @param {string|null} params.blob_object_id - Walrus blob object ID for renewal tracking
+ * @param {string} params.network - Network name (testnet/mainnet)
  * @returns {Transaction}
  */
 export function build_update_transaction({
@@ -279,9 +284,15 @@ export function build_update_transaction({
   patches,
   file_metadata,
   blob_object_id,
+  network,
 }) {
   const tx = new Transaction()
   tx.setSender(wallet)
+
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
 
   // Build patch lookup map
   const patch_map = new Map()
@@ -307,6 +318,7 @@ export function build_update_transaction({
     tx.moveCall({
       target: `${package_id}::site::add_resource`,
       arguments: [
+        tx.object(version_id),
         tx.object(admin_cap_id),
         site_ref,
         tx.pure.string(path),
@@ -328,6 +340,7 @@ export function build_update_transaction({
     tx.moveCall({
       target: `${package_id}::site::update_resource`,
       arguments: [
+        tx.object(version_id),
         tx.object(admin_cap_id),
         site_ref,
         tx.pure.string(path),
@@ -343,7 +356,12 @@ export function build_update_transaction({
   for (const path of deleted_paths) {
     tx.moveCall({
       target: `${package_id}::site::delete_resource`,
-      arguments: [tx.object(admin_cap_id), site_ref, tx.pure.string(path)],
+      arguments: [
+        tx.object(version_id),
+        tx.object(admin_cap_id),
+        site_ref,
+        tx.pure.string(path),
+      ],
     })
   }
 
@@ -528,6 +546,7 @@ export async function update(dir, options = {}) {
     patches,
     file_metadata,
     blob_object_id,
+    network,
   })
 
   const tx_bytes = await tx.build({ client: sui_client })

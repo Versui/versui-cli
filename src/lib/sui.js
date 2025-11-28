@@ -4,7 +4,11 @@ import { deriveObjectID } from '@mysten/sui/utils'
 import chalk from 'chalk'
 
 import { encode_base36 } from './base36.js'
-import { get_versui_package_id, get_versui_registry_id } from './env.js'
+import {
+  get_versui_package_id,
+  get_versui_registry_id,
+  get_version_object_id,
+} from './env.js'
 
 /**
  * @typedef {Object} TransactionResult
@@ -49,10 +53,16 @@ export async function build_create_site_transaction(
 
   const tx = new Transaction()
 
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
+
   // Call create_site (returns AdminCap to sender, shares Site)
   tx.moveCall({
     target: `${package_id}::site::create_site`,
     arguments: [
+      tx.object(version_id),
       tx.object(versui_object_id),
       tx.pure.string(name),
       tx.pure.string(''), // favicon_url (empty string default)
@@ -98,11 +108,17 @@ export async function build_add_resources_transaction(
 
   const tx = new Transaction()
 
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
+
   // Add all resources
   for (const resource of resources) {
     tx.moveCall({
       target: `${package_id}::site::add_resource`,
       arguments: [
+        tx.object(version_id),
         tx.object(admin_cap_id), // AdminCap reference (owned object)
         tx.sharedObjectRef({
           objectId: site_id,
@@ -159,11 +175,17 @@ export async function build_update_transaction(
 
   const tx = new Transaction()
 
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
+
   // Update all resources
   for (const resource of resources) {
     tx.moveCall({
       target: `${package_id}::site::update_resource`,
       arguments: [
+        tx.object(version_id),
         tx.object(admin_cap_id), // AdminCap reference (owned object)
         tx.sharedObjectRef({
           objectId: site_id,
@@ -342,6 +364,11 @@ export async function build_delete_resources_transaction(
 
   const tx = new Transaction()
 
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
+
   // Delete each resource
   for (const name_obj of resource_names) {
     // Extract the path string from the dynamic field name object
@@ -351,6 +378,7 @@ export async function build_delete_resources_transaction(
     tx.moveCall({
       target: `${package_id}::site::delete_resource`,
       arguments: [
+        tx.object(version_id),
         tx.object(admin_cap_id), // AdminCap reference
         tx.sharedObjectRef({
           objectId: site_id,
@@ -404,10 +432,16 @@ export async function build_delete_transaction(
 
   const tx = new Transaction()
 
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
+
   // Call delete_site (consumes AdminCap and Site)
   tx.moveCall({
     target: `${package_id}::site::delete_site`,
     arguments: [
+      tx.object(version_id),
       tx.object(versui_object_id), // Versui registry (shared mutable)
       tx.object(admin_cap_id), // AdminCap reference (consumed)
       tx.sharedObjectRef({

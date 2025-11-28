@@ -4,14 +4,14 @@
  */
 
 const V10_PACKAGE_ID =
-  '0x2489609d5e6b754634d4ca892ab259222482f31596a13530fcc8110b5b2461cb'
+  '0xffbe43caf92501ccb688b16843eada8eab9fd7487cee77b2347d3fa83e619e4e'
 
 /**
  * Original package ID (V9 and earlier)
  * Used for type filtering since existing objects still reference this package
  */
 const ORIGINAL_PACKAGE_ID =
-  '0x824052b308a7edad4ef16eef0f4f724786577f7fef68b6dddeeba8006ead9eb8'
+  '0xffbe43caf92501ccb688b16843eada8eab9fd7487cee77b2347d3fa83e619e4e'
 
 /**
  * Shared Versui registry object IDs by network
@@ -20,7 +20,7 @@ const ORIGINAL_PACKAGE_ID =
 const VERSUI_REGISTRY_IDS = {
   testnet:
     process.env.VERSUI_OBJECT_ID_TESTNET ||
-    '0x0075af6378f6f8fc34c778693ccc92dcd1a2868157a2932e87f32f80f3ca2c45',
+    '0x3efa58f79c62f8232532eaa9556313a618d4b519af3905c87d6ecc59950a3045',
   mainnet: process.env.VERSUI_OBJECT_ID_MAINNET || null,
 }
 
@@ -32,6 +32,16 @@ const DOMAIN_REGISTRY_IDS = {
     process.env.DOMAIN_REGISTRY_ID_TESTNET ||
     '0x5a49320853b8bbb22c727ece89f0683684333081fcc7c4a7d28b992f640e4629',
   mainnet: process.env.DOMAIN_REGISTRY_ID_MAINNET || null,
+}
+
+/**
+ * Version shared object IDs by network
+ */
+const VERSION_OBJECT_IDS = {
+  testnet:
+    process.env.VERSION_OBJECT_ID_TESTNET ||
+    '0x439cff7cc4d22ee778e59a24cd70a4c0ebf78a2db768b89c2cf4eccd909573a5',
+  mainnet: process.env.VERSION_OBJECT_ID_MAINNET || null,
 }
 
 /**
@@ -113,4 +123,13 @@ export function get_versui_registry_id(network) {
  */
 export function get_domain_registry_id(network) {
   return DOMAIN_REGISTRY_IDS[network]
+}
+
+/**
+ * Get Version shared object ID for network
+ * @param {string} network - Network name (testnet|mainnet)
+ * @returns {string|null} Version object ID or null if not deployed
+ */
+export function get_version_object_id(network) {
+  return VERSION_OBJECT_IDS[network]
 }
