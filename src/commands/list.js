@@ -5,7 +5,7 @@ import chalk from 'chalk'
 import ora from 'ora'
 
 import { format_sites_table } from '../lib/sui.js'
-import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
+import { get_original_package_id } from '../lib/env.js'
 
 /**
  * List deployments
