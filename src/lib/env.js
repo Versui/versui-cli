@@ -4,7 +4,7 @@
  */
 
 const V10_PACKAGE_ID =
-  '0x9922ed554edda60ee0757de6bcc4662df3eda9a918e2f108e0c06a6ca2934d44'
+  '0x884d7f62ca6c8945c0fde235dcaa0b96cc3dfbd6be44a73a33372b0c1b19094c'
 
 /**
  * Original package ID (V9 and earlier)
@@ -18,8 +18,20 @@ const ORIGINAL_PACKAGE_ID =
  * This is the shared object that maintains the owner->name->site_id mapping
  */
 const VERSUI_REGISTRY_IDS = {
-  testnet: process.env.VERSUI_OBJECT_ID_TESTNET || null,
+  testnet:
+    process.env.VERSUI_OBJECT_ID_TESTNET ||
+    '0x4c1259d718fb5b3c0b1cb15bd8f69a7e75b648017547c80c856377a2c783998d',
   mainnet: process.env.VERSUI_OBJECT_ID_MAINNET || null,
+}
+
+/**
+ * DomainRegistry shared object IDs by network
+ */
+const DOMAIN_REGISTRY_IDS = {
+  testnet:
+    process.env.DOMAIN_REGISTRY_ID_TESTNET ||
+    '0x71d0c39b23c5d1930f3314c852b5fbc54b9c19e8e780399c29c5a1a854d2ab57',
+  mainnet: process.env.DOMAIN_REGISTRY_ID_MAINNET || null,
 }
 
 /**
@@ -92,4 +104,13 @@ export function get_original_package_id(network) {
  */
 export function get_versui_registry_id(network) {
   return VERSUI_REGISTRY_IDS[network]
+}
+
+/**
+ * Get DomainRegistry shared object ID for network
+ * @param {string} network - Network name (testnet|mainnet)
+ * @returns {string|null} DomainRegistry object ID or null if not deployed
+ */
+export function get_domain_registry_id(network) {
+  return DOMAIN_REGISTRY_IDS[network]
 }
