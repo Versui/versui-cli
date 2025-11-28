@@ -448,10 +448,12 @@ export function derive_site_address(
   })
 
   // Encode the key
-  const encoded_key = site_key_bcs.serialize({
-    owner: owner_address,
-    name: site_name,
-  }).toBytes()
+  const encoded_key = site_key_bcs
+    .serialize({
+      owner: owner_address,
+      name: site_name,
+    })
+    .toBytes()
 
   // Type tag for SiteKey
   const type_tag = `${package_id}::site::SiteKey`

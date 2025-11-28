@@ -5,10 +5,7 @@ import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
 
-import {
-  get_versui_package_id,
-  get_versui_registry_id,
-} from '../lib/env.js'
+import { get_versui_package_id, get_versui_registry_id } from '../lib/env.js'
 import { get_site_id_by_name } from '../lib/sui.js'
 
 /**
@@ -57,7 +54,7 @@ export async function delete_site(site_identifiers, options = {}) {
 
   // Resolve all identifiers to site IDs
   const ids_to_delete = []
-  let lookup_spinner = ora('Resolving site identifiers...').start()
+  const lookup_spinner = ora('Resolving site identifiers...').start()
 
   for (const identifier of identifiers) {
     // If it looks like a Sui object ID, use directly
@@ -284,7 +281,10 @@ export async function delete_site(site_identifiers, options = {}) {
 
           try {
             // Dynamic gas budget: 1M base + 1M per resource (min 50M)
-            const gas_budget = Math.max(50_000_000, 1_000_000 + paths_to_delete.length * 1_000_000)
+            const gas_budget = Math.max(
+              50_000_000,
+              1_000_000 + paths_to_delete.length * 1_000_000,
+            )
 
             const result = spawnSync(
               'sui',
