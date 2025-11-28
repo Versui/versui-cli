@@ -8,7 +8,11 @@ import ora from 'ora'
 import prompts from 'prompts'
 import Table from 'cli-table3'
 
-import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
+import {
+  get_versui_package_id,
+  get_original_package_id,
+  get_version_object_id,
+} from '../lib/env.js'
 
 // DomainRegistry shared object IDs (deployed via domain_registry.move init)
 const DOMAIN_REGISTRY_IDS = {
@@ -313,9 +317,15 @@ export async function domain_add(domain, options = {}) {
     const tx = new Transaction()
     tx.setSender(address)
 
+    const version_id = get_version_object_id(network)
+    if (!version_id) {
+      throw new Error(`Version object not deployed on ${network}`)
+    }
+
     tx.moveCall({
       target: `${package_id}::domain_registry::add_custom_domain`,
       arguments: [
+        tx.object(version_id),
         tx.object(registry_id),
         tx.object(admin_cap_id),
         tx.object(site_id),
@@ -472,9 +482,15 @@ export async function domain_remove(domain, options = {}) {
     const tx = new Transaction()
     tx.setSender(address)
 
+    const version_id = get_version_object_id(network)
+    if (!version_id) {
+      throw new Error(`Version object not deployed on ${network}`)
+    }
+
     tx.moveCall({
       target: `${package_id}::domain_registry::remove_custom_domain`,
       arguments: [
+        tx.object(version_id),
         tx.object(registry_id),
         tx.object(admin_cap_id),
         tx.object(site_id),

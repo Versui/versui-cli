@@ -705,6 +705,7 @@ export async function deploy(dir, options = {}) {
       versui_object_id,
       wallet: state.wallet,
       site_name,
+      network,
     })
 
     const tx1_bytes = await tx1.build({ client: sui_client })
@@ -796,6 +797,7 @@ export async function deploy(dir, options = {}) {
       quilt_patches,
       file_metadata,
       blob_object_id,
+      network,
     })
 
     const tx2_bytes = await tx2.build({ client: sui_client })
@@ -1201,10 +1203,17 @@ async function deploy_json(dir, options) {
   const tx1 = new Transaction()
   tx1.setSender(wallet)
 
+  const { get_version_object_id } = await import('../lib/env.js')
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
+
   // create_site returns AdminCap to sender, creates shared Site
   tx1.moveCall({
     target: `${package_id}::site::create_site`,
     arguments: [
+      tx1.object(version_id),
       tx1.object(versui_object_id),
       tx1.pure.string(site_name),
       tx1.pure.string(''),
@@ -1267,6 +1276,7 @@ async function deploy_json(dir, options) {
     tx2.moveCall({
       target: `${package_id}::site::add_resource`,
       arguments: [
+        tx2.object(version_id),
         tx2.object(admin_cap_id), // AdminCap reference
         tx2.object(site_id), // Shared Site reference
         tx2.pure.string(full_path),

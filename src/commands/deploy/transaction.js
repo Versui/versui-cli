@@ -1,6 +1,8 @@
 import { Transaction } from '@mysten/sui/transactions'
 import { fromBase64 } from '@mysten/sui/utils'
 
+import { get_version_object_id } from '../../lib/env.js'
+
 /**
  * Builds identifier -> full path mapping from file metadata
  * With --blobs JSON format, identifier equals the full relative path
@@ -25,6 +27,7 @@ export function build_identifier_map(file_metadata) {
  * @param {string} params.wallet - Wallet address
  * @param {string} params.site_name - Site name
  * @param {string} [params.favicon_url=''] - Optional favicon URL
+ * @param {string} params.network - Network (testnet|mainnet)
  * @returns {Transaction} Configured transaction object
  */
 export function create_site_transaction({
@@ -33,14 +36,21 @@ export function create_site_transaction({
   wallet,
   site_name,
   favicon_url = '',
+  network,
 }) {
   const tx = new Transaction()
   tx.setSender(wallet)
+
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
 
   // create_site entry function (returns AdminCap to sender, shares Site)
   tx.moveCall({
     target: `${package_id}::site::create_site`,
     arguments: [
+      tx.object(version_id),
       tx.object(versui_object_id),
       tx.pure.string(site_name),
       tx.pure.string(favicon_url),
@@ -62,6 +72,7 @@ export function create_site_transaction({
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.quilt_patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
  * @param {string} params.blob_object_id - Walrus blob object ID for renewal tracking
+ * @param {string} params.network - Network (testnet|mainnet)
  * @returns {Transaction} Configured transaction object
  */
 export function add_resources_transaction({
@@ -73,9 +84,15 @@ export function add_resources_transaction({
   quilt_patches,
   file_metadata,
   blob_object_id,
+  network,
 }) {
   const tx = new Transaction()
   tx.setSender(wallet)
+
+  const version_id = get_version_object_id(network)
+  if (!version_id) {
+    throw new Error(`Version object not deployed on ${network}`)
+  }
 
   // Build identifier -> full path mapping (walrus flattens paths)
   const identifier_to_path = build_identifier_map(file_metadata)
@@ -93,6 +110,7 @@ export function add_resources_transaction({
     tx.moveCall({
       target: `${package_id}::site::add_resource`,
       arguments: [
+        tx.object(version_id),
         tx.object(admin_cap_id), // AdminCap reference (owned object)
         tx.sharedObjectRef({
           objectId: site_id,

@@ -10,6 +10,7 @@ import {
   get_versui_package_id,
   get_versui_registry_id,
   get_original_package_id,
+  get_version_object_id,
 } from '../lib/env.js'
 import { get_site_id_by_name } from '../lib/sui.js'
 
@@ -418,6 +419,11 @@ export async function delete_site(site_identifiers, options = {}) {
                 1_000_000 + batch.length * 1_000_000,
               )
 
+              const version_id = get_version_object_id(network)
+              if (!version_id) {
+                throw new Error(`Version object not deployed on ${network}`)
+              }
+
               const result = await execute_sui_command([
                 'client',
                 'call',
@@ -428,6 +434,7 @@ export async function delete_site(site_identifiers, options = {}) {
                 '--function',
                 'delete_resources_batch',
                 '--args',
+                version_id,
                 admin_cap_id,
                 site_id,
                 JSON.stringify(batch),
@@ -497,6 +504,11 @@ export async function delete_site(site_identifiers, options = {}) {
       const delete_spinner = ora('Deleting site...').start()
 
       try {
+        const version_id = get_version_object_id(network)
+        if (!version_id) {
+          throw new Error(`Version object not deployed on ${network}`)
+        }
+
         const result = await execute_sui_command([
           'client',
           'call',
@@ -507,6 +519,7 @@ export async function delete_site(site_identifiers, options = {}) {
           '--function',
           'delete_site',
           '--args',
+          version_id,
           admin_cap_id,
           site_id,
           '--gas-budget',
