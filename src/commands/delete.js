@@ -1,4 +1,5 @@
 import { execSync, spawnSync } from 'node:child_process'
+import { resolve } from 'node:path'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import chalk from 'chalk'
@@ -18,14 +19,64 @@ function is_valid_sui_object_id(id) {
 }
 
 /**
- * Validate resource path (optional leading /, no shell injection characters)
+ * Validate resource path (optional leading /, no shell injection or path traversal)
  * @param {string} path - Resource path to validate
  * @returns {boolean} True if valid
  */
-function is_valid_resource_path(path) {
+export function is_valid_resource_path(path) {
+  // Limit path length to prevent DoS
+  if (path.length > 10000) return false
+
+  // Decode URL encoding (including double encoding) to prevent bypasses
+  let decoded = path
+  let prev_decoded = ''
+  while (decoded !== prev_decoded) {
+    prev_decoded = decoded
+    try {
+      decoded = decodeURIComponent(decoded)
+    } catch {
+      return false // Invalid encoding
+    }
+  }
+
+  // Normalize unicode to prevent homoglyph attacks
+  const normalized_input = decoded.normalize('NFC')
+
+  // Block null bytes
+  if (normalized_input.includes('\x00')) return false
+
+  // Block unicode lookalikes for dots (fullwidth period, etc)
+  // Allow normal unicode characters (e.g., Chinese/Japanese/emoji)
+  if (/[\uFF0E\u2024\u3002\uFE52\uFF61]/.test(normalized_input)) return false
+
+  // Block Windows-style paths (absolute or UNC)
+  if (/^[a-zA-Z]:/.test(normalized_input)) return false // C:\
+  if (/^\\/.test(normalized_input)) return false // \\ or \server\share
+
+  // Block backslashes (Windows path separators)
+  if (normalized_input.includes('\\')) return false
+
+  // Block patterns with triple or more dots
+  if (/\.{3,}/.test(normalized_input)) return false
+
   // Block shell injection characters: ; | ` $ (command substitution)
-  // Allow web-standard characters: ? & (query strings), [] {} (URLs), etc.
-  if (/[;|`$]|<\(|\$\(/.test(path)) return false
+  // Allow web-standard characters: ? & # (query strings, fragments), [] {} (URLs), etc.
+  if (/[;|`$]|<\(|\$\(/.test(normalized_input)) return false
+
+  // Block path traversal - check for .. BEFORE normalizing (normalize resolves them)
+  // Match .. as a path segment (not just substring, to allow "file..txt")
+  if (/(?:^|\/|\\)\.\.(?:\/|\\|$)/.test(normalized_input)) return false
+
+  // Additional check: resolve against a fake root to ensure no escapes
+  // Strip leading / for resolve (since absolute paths override the base)
+  const path_to_resolve = normalized_input.startsWith('/')
+    ? normalized_input.slice(1)
+    : normalized_input
+  const resolved = resolve('/virtual_root', path_to_resolve)
+  if (!resolved.startsWith('/virtual_root')) {
+    return false
+  }
+
   return true
 }
 

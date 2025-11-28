@@ -52,7 +52,11 @@ export async function build_create_site_transaction(
   // Call create_site (returns AdminCap to sender, shares Site)
   tx.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx.object(versui_object_id), tx.pure.string(name)],
+    arguments: [
+      tx.object(versui_object_id),
+      tx.pure.string(name),
+      tx.pure.string(''), // favicon_url (empty string default)
+    ],
   })
 
   // Set sender
@@ -393,12 +397,18 @@ export async function build_delete_transaction(
     throw new Error(`Versui package not deployed on ${network}`)
   }
 
+  const versui_object_id = get_versui_registry_id(network)
+  if (!versui_object_id) {
+    throw new Error(`Versui registry not deployed on ${network}`)
+  }
+
   const tx = new Transaction()
 
   // Call delete_site (consumes AdminCap and Site)
   tx.moveCall({
     target: `${package_id}::site::delete_site`,
     arguments: [
+      tx.object(versui_object_id), // Versui registry (shared mutable)
       tx.object(admin_cap_id), // AdminCap reference (consumed)
       tx.sharedObjectRef({
         objectId: site_id,
