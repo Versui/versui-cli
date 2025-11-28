@@ -475,6 +475,10 @@ async function confirm_action(
     process.exit(0)
   }
 
+  // User confirmed - restore header for next display update
+  state.show_header = true
+  console.clear()
+
   return true
 }
 
