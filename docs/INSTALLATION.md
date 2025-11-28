@@ -1,6 +1,6 @@
 # Installation Guide
 
-Complete setup instructions for VersUI CLI and its dependencies.
+Complete setup instructions for Versui CLI and its dependencies.
 
 ---
 
@@ -22,7 +22,7 @@ node --version  # Should be v18.0.0 or higher
 
 ---
 
-## Installing VersUI CLI
+## Installing Versui CLI
 
 ### Global Installation (Recommended)
 
@@ -164,7 +164,7 @@ Ensure all dependencies are installed:
 # Node.js
 node --version  # v18.0.0+
 
-# VersUI CLI
+# Versui CLI
 versui --version
 
 # Sui CLI
@@ -282,7 +282,7 @@ npm config set prefix '~/.npm-global'
 export PATH="$PATH:$HOME/.npm-global/bin"
 source ~/.zshrc
 
-# Reinstall VersUI
+# Reinstall Versui
 npm install -g @versui/cli
 ```
 
@@ -291,7 +291,7 @@ npm install -g @versui/cli
 ## Uninstalling
 
 ```bash
-# Remove VersUI CLI
+# Remove Versui CLI
 npm uninstall -g @versui/cli
 
 # Remove Sui CLI

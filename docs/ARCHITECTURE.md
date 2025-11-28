@@ -1,6 +1,6 @@
 # Architecture
 
-Deep dive into VersUI's technical internals.
+Deep dive into Versui's technical internals.
 
 ---
 
@@ -13,7 +13,7 @@ Deep dive into VersUI's technical internals.
        │
        ▼
 ┌─────────────────────────────────────────────┐
-│           VersUI CLI (Node.js)              │
+│           Versui CLI (Node.js)              │
 │  ┌──────────────────────────────────────┐   │
 │  │ 1. File Scanner                      │   │
 │  │    - Read directory recursively      │   │
@@ -119,7 +119,7 @@ function detect_changes(old_manifest, new_manifest) {
 
 **Architecture:**
 
-VersUI uses Walrus CLI as a subprocess (not direct SDK integration).
+Versui uses Walrus CLI as a subprocess (not direct SDK integration).
 
 **Storage process:**
 
@@ -164,7 +164,7 @@ Example: 0xa3f5b8c9d2e1f4a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3
 
 **Smart Contracts (Move):**
 
-VersUI interacts with Sui Move contracts deployed at:
+Versui interacts with Sui Move contracts deployed at:
 
 ```
 Package: 0xVERSUI_PACKAGE_ID (network-specific)
@@ -574,7 +574,7 @@ async function verify_ownership(site_id, signer_address) {
 
 ### Decentralization Benefits
 
-| Attack Vector          | Traditional Hosting                       | VersUI                                         |
+| Attack Vector          | Traditional Hosting                       | Versui                                         |
 | ---------------------- | ----------------------------------------- | ---------------------------------------------- |
 | **Censorship**         | Single point of control (host can remove) | No single authority (100+ nodes)               |
 | **Data loss**          | Single datacenter failure                 | Survives 67% node failure (2/3 erasure coding) |

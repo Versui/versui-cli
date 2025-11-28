@@ -1,6 +1,6 @@
 # Examples
 
-Real-world usage patterns for VersUI CLI.
+Real-world usage patterns for Versui CLI.
 
 ---
 
@@ -11,7 +11,7 @@ Real-world usage patterns for VersUI CLI.
 **.github/workflows/deploy.yml**
 
 ```yaml
-name: Deploy to VersUI
+name: Deploy to Versui
 
 on:
   push:
@@ -49,10 +49,10 @@ jobs:
           echo "${{ secrets.SUI_KEYSTORE }}" > ~/.sui/sui_config/sui.keystore
           echo "${{ secrets.SUI_CLIENT_CONFIG }}" > ~/.sui/sui_config/client.yaml
 
-      - name: Install VersUI CLI
+      - name: Install Versui CLI
         run: npm install -g @versui/cli
 
-      - name: Deploy to VersUI
+      - name: Deploy to Versui
         run: versui deploy ./dist --yes --json --network testnet -e 30
 ```
 
@@ -104,7 +104,7 @@ deploy:
     - echo "$SUI_KEYSTORE" > ~/.sui/sui_config/sui.keystore
     - echo "$SUI_CLIENT_CONFIG" > ~/.sui/sui_config/client.yaml
 
-    # Install VersUI
+    # Install Versui
     - npm install -g @versui/cli
   script:
     - versui deploy ./dist --yes --json --network testnet
@@ -119,7 +119,7 @@ deploy:
 **Workflow for incremental deployments:**
 
 ```yaml
-- name: Update VersUI Site
+- name: Update Versui Site
   run: |
     versui update ./dist \
       --site ${{ secrets.VERSUI_SITE_ID }} \
@@ -295,7 +295,7 @@ npm run update:mainnet   # Update production site
 
 ## Custom Service Worker Integration
 
-### Embed VersUI in Existing Service Worker
+### Embed Versui in Existing Service Worker
 
 **Your existing `sw.js`:**
 
@@ -307,10 +307,10 @@ self.addEventListener('install', event => {
   console.log('Service worker installing...')
 })
 
-// Add VersUI handler
+// Add Versui handler
 const versui = create_versui_handler()
 
-// Load site manifest (from VersUI deploy output)
+// Load site manifest (from Versui deploy output)
 versui.load({
   '/index.html': 'blob-id-1',
   '/style.css': 'blob-id-2',
@@ -319,7 +319,7 @@ versui.load({
 
 // Intercept fetch events
 self.addEventListener('fetch', event => {
-  // Let VersUI handle static files
+  // Let Versui handle static files
   if (versui.handle(event)) {
     return
   }

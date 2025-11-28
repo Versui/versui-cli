@@ -1,6 +1,6 @@
-# Contributing to VersUI CLI
+# Contributing to Versui CLI
 
-Thank you for considering contributing to VersUI! This document outlines the development setup, PR process, and coding standards.
+Thank you for considering contributing to Versui! This document outlines the development setup, PR process, and coding standards.
 
 ---
 
@@ -17,7 +17,7 @@ Thank you for considering contributing to VersUI! This document outlines the dev
 
 ```bash
 # Clone repository
-git clone https://github.com/Versui/versui-cli
+git clone https://github.com/versui/versui-cli
 cd versui-cli
 
 # Install dependencies
