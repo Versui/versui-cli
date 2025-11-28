@@ -66,6 +66,7 @@ const state = {
   spinner_text: null,
   upload_progress: 0,
   spinner_frame: 0,
+  show_header: true, // Toggle to prevent header duplication after prompts
 }
 
 // format_bytes moved to ./deploy/formatting.js and imported above
@@ -185,7 +186,7 @@ function render_state(include_header = false) {
 
 function update_display() {
   state.spinner_frame++
-  logUpdate(render_state(true))
+  logUpdate(render_state(state.show_header))
 }
 
 function finish_display() {
@@ -340,6 +341,8 @@ async function confirm_action(
   if (auto_yes) return true
 
   finish_display()
+  state.show_header = false // Header already persisted, don't show again
+
   console.log('')
   console.log('')
   console.log(chalk.bold.yellow(`  ⚠  ${title}`))
@@ -382,9 +385,6 @@ async function confirm_action(
     console.log(chalk.yellow('  Cancelled.\n'))
     process.exit(0)
   }
-
-  // Resume display after confirmation (don't clear - preserves header)
-  update_display()
 
   return true
 }
@@ -727,7 +727,7 @@ export async function deploy(dir, options = {}) {
 
     // Execute transaction 1
     state.spinner_text = 'Creating site...'
-    update_display()
+    // Note: Interval will handle display updates
 
     let tx1_result
     try {
@@ -815,7 +815,7 @@ export async function deploy(dir, options = {}) {
     )
 
     state.spinner_text = 'Adding resources...'
-    update_display()
+    // Note: Interval will handle display updates
 
     // Execute transaction 2
     try {
