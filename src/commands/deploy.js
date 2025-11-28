@@ -27,6 +27,7 @@ import {
 } from '../lib/suins.js'
 import { detect_service_worker, generate_sw_snippet } from '../lib/sw.js'
 import { VERSUI_PACKAGE_IDS, get_versui_registry_id } from '../lib/env.js'
+import { derive_site_address } from '../lib/sui.js'
 
 import { build_files_metadata } from './deploy/file-metadata.js'
 import { format_bytes, format_wallet_address } from './deploy/formatting.js'
@@ -649,6 +650,56 @@ export async function deploy(dir, options = {}) {
       throw new Error(`Versui registry not deployed on ${network} yet`)
     }
 
+    // Check if site name already exists (prevents duplicate creation)
+    state.spinner_text = 'Checking site name availability...'
+    update_display()
+
+    const expected_site_id = derive_site_address(
+      versui_object_id,
+      state.wallet,
+      site_name,
+      network,
+    )
+
+    try {
+      const existing_site = await sui_client.getObject({
+        id: expected_site_id,
+        options: { showContent: true },
+      })
+
+      if (existing_site?.data) {
+        state.spinner_text = null
+        clearInterval(spinner_interval)
+        finish_display()
+        throw new Error(
+          `Site name "${site_name}" is already taken by you. Site ID: ${expected_site_id}\n\n` +
+            `To update this site, use: versui update ${site_name}\n` +
+            `To delete this site, use: versui delete ${site_name}`,
+        )
+      }
+    } catch (err) {
+      // If error is 'object not found', site doesn't exist (OK to proceed)
+      // Any other error should be thrown
+      if (!err.message?.includes('already taken')) {
+        // Ignore 'object not found' errors (expected case)
+        if (
+          err.code !== 'OBJECT_NOT_FOUND' &&
+          !err.message?.includes('not found')
+        ) {
+          state.spinner_text = null
+          throw new Error(
+            `Failed to check site name availability: ${err.message}`,
+          )
+        }
+      } else {
+        // Re-throw our own error message
+        throw err
+      }
+    }
+
+    state.spinner_text = null
+    update_display()
+
     const tx1 = create_site_transaction({
       package_id,
       versui_object_id,
@@ -1104,6 +1155,46 @@ async function deploy_json(dir, options) {
   const versui_object_id = get_versui_registry_id(network)
   if (!versui_object_id) {
     throw new Error(`Versui registry not deployed on ${network} yet`)
+  }
+
+  // Check if site name already exists (prevents duplicate creation)
+  const expected_site_id = derive_site_address(
+    versui_object_id,
+    wallet,
+    site_name,
+    network,
+  )
+
+  try {
+    const existing_site = await sui_client.getObject({
+      id: expected_site_id,
+      options: { showContent: true },
+    })
+
+    if (existing_site?.data) {
+      throw new Error(
+        `Site name "${site_name}" is already taken by you. Site ID: ${expected_site_id}\n\n` +
+          `To update this site, use: versui update ${site_name}\n` +
+          `To delete this site, use: versui delete ${site_name}`,
+      )
+    }
+  } catch (err) {
+    // If error is 'object not found', site doesn't exist (OK to proceed)
+    // Any other error should be thrown
+    if (!err.message?.includes('already taken')) {
+      // Ignore 'object not found' errors (expected case)
+      if (
+        err.code !== 'OBJECT_NOT_FOUND' &&
+        !err.message?.includes('not found')
+      ) {
+        throw new Error(
+          `Failed to check site name availability: ${err.message}`,
+        )
+      }
+    } else {
+      // Re-throw our own error message
+      throw err
+    }
   }
 
   // === TRANSACTION 1: Create Site ===
