@@ -16,17 +16,17 @@ import { get_site_id_by_name } from '../lib/sui.js'
  */
 function execute_sui_command(args) {
   return new Promise(resolve => {
-    const proc = spawn('sui', args, { encoding: 'utf-8' })
+    const proc = spawn('sui', args, { stdio: ['pipe', 'pipe', 'pipe'] })
 
     let stdout = ''
     let stderr = ''
 
-    proc.stdout?.on('data', data => {
-      stdout += data
+    proc.stdout.on('data', data => {
+      stdout += data.toString()
     })
 
-    proc.stderr?.on('data', data => {
-      stderr += data
+    proc.stderr.on('data', data => {
+      stderr += data.toString()
     })
 
     proc.on('close', code => {
