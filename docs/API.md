@@ -1,6 +1,6 @@
 # API Reference
 
-Complete command reference for VersUI CLI.
+Complete command reference for Versui CLI.
 
 ---
 
