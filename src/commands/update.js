@@ -212,11 +212,11 @@ export function compare_files(local_files, existing_resources) {
  * @param {string} dir - Directory path
  * @param {string[]} file_paths - Absolute file paths to upload
  * @param {number} epochs - Storage epochs
- * @returns {Promise<{blob_id: string, patches: Array<{identifier: string, quiltPatchId: string}>}>}
+ * @returns {Promise<{blob_id: string, blob_object_id: string, patches: Array<{identifier: string, quiltPatchId: string}>}>}
  */
 async function upload_files_to_walrus(dir, file_paths, epochs) {
   if (file_paths.length === 0) {
-    return { blob_id: null, patches: [] }
+    return { blob_id: null, blob_object_id: null, patches: [] }
   }
 
   // Build --blobs args with JSON format
@@ -240,9 +240,13 @@ async function upload_files_to_walrus(dir, file_paths, epochs) {
   const blob_id =
     blob_store?.newlyCreated?.blobObject?.blobId ||
     blob_store?.alreadyCertified?.blobId
+  const blob_object_id =
+    blob_store?.newlyCreated?.blobObject?.blobObjectId ||
+    blob_store?.alreadyCertified?.object
 
   return {
     blob_id,
+    blob_object_id,
     patches: result.storedQuiltBlobs || [],
   }
 }
@@ -260,6 +264,7 @@ async function upload_files_to_walrus(dir, file_paths, epochs) {
  * @param {string[]} params.deleted_paths - Paths of deleted files
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
+ * @param {string|null} params.blob_object_id - Walrus blob object ID for renewal tracking
  * @returns {Transaction}
  */
 export function build_update_transaction({
@@ -273,6 +278,7 @@ export function build_update_transaction({
   deleted_paths,
   patches,
   file_metadata,
+  blob_object_id,
 }) {
   const tx = new Transaction()
   tx.setSender(wallet)
@@ -296,7 +302,7 @@ export function build_update_transaction({
   for (const path of added_paths) {
     const info = file_metadata[path]
     const patch_id = patch_map.get(path)
-    if (!info || !patch_id) continue
+    if (!info || !patch_id || !blob_object_id) continue
 
     tx.moveCall({
       target: `${package_id}::site::add_resource`,
@@ -305,6 +311,7 @@ export function build_update_transaction({
         site_ref,
         tx.pure.string(path),
         tx.pure.string(patch_id),
+        tx.pure.id(blob_object_id), // Blob object ID for renewal tracking
         tx.pure.vector('u8', Array.from(fromBase64(info.hash))),
         tx.pure.string(info.content_type),
         tx.pure.u64(info.size),
@@ -316,7 +323,7 @@ export function build_update_transaction({
   for (const path of updated_paths) {
     const info = file_metadata[path]
     const patch_id = patch_map.get(path)
-    if (!info || !patch_id) continue
+    if (!info || !patch_id || !blob_object_id) continue
 
     tx.moveCall({
       target: `${package_id}::site::update_resource`,
@@ -325,6 +332,7 @@ export function build_update_transaction({
         site_ref,
         tx.pure.string(path),
         tx.pure.string(patch_id),
+        tx.pure.id(blob_object_id), // Blob object ID for renewal tracking
         tx.pure.vector('u8', Array.from(fromBase64(info.hash))),
         tx.pure.u64(info.size),
       ],
@@ -493,7 +501,11 @@ export async function update(dir, options = {}) {
     }
   }
 
-  const { patches } = await upload_files_to_walrus(dir, files_to_upload, epochs)
+  const { patches, blob_object_id } = await upload_files_to_walrus(
+    dir,
+    files_to_upload,
+    epochs,
+  )
 
   if (files_to_upload.length > 0 && !json_mode) {
     spinner.succeed(`Uploaded ${files_to_upload.length} files to Walrus`)
@@ -515,6 +527,7 @@ export async function update(dir, options = {}) {
     deleted_paths: diff.deleted,
     patches,
     file_metadata,
+    blob_object_id,
   })
 
   const tx_bytes = await tx.build({ client: sui_client })

@@ -50,10 +50,13 @@ self.addEventListener('activate',e=>e.waitUntil(clients.claim()));
 self.addEventListener('fetch',e=>{
   const p=new URL(e.request.url).pathname;
   const b=R[p];
-  if(b)e.respondWith((async()=>{
-    for(const a of A){try{const r=await fetch(a+'/v1/blobs/by-quilt-patch-id/'+b);if(r.ok){const ext=p.match(/\\.[^.]+$/)?.[0]||'';const type=M[ext]||'application/octet-stream';return new Response(await r.blob(),{headers:{'Content-Type':type}})}}catch(e){}}
-    return new Response('expired',{status:404});
-  })());
+  if(b){
+    if(!/^[a-zA-Z0-9_-]+$/.test(b))return e.respondWith(new Response('invalid',{status:400}));
+    e.respondWith((async()=>{
+      for(const a of A){try{const r=await fetch(a+'/v1/blobs/by-quilt-patch-id/'+b);if(r.ok){const ext=p.match(/\\.[^.]+$/)?.[0]||'';const type=M[ext]||'application/octet-stream';return new Response(await r.blob(),{headers:{'Content-Type':type}})}}catch(e){}}
+      return new Response('expired',{status:404});
+    })());
+  }
 });`
 
   return { html, sw }

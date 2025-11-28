@@ -24,6 +24,7 @@ export function build_identifier_map(file_metadata) {
  * @param {string} params.versui_object_id - Versui shared object ID
  * @param {string} params.wallet - Wallet address
  * @param {string} params.site_name - Site name
+ * @param {string} [params.favicon_url=''] - Optional favicon URL
  * @returns {Transaction} Configured transaction object
  */
 export function create_site_transaction({
@@ -31,6 +32,7 @@ export function create_site_transaction({
   versui_object_id,
   wallet,
   site_name,
+  favicon_url = '',
 }) {
   const tx = new Transaction()
   tx.setSender(wallet)
@@ -38,7 +40,11 @@ export function create_site_transaction({
   // create_site entry function (returns AdminCap to sender, shares Site)
   tx.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx.object(versui_object_id), tx.pure.string(site_name)],
+    arguments: [
+      tx.object(versui_object_id),
+      tx.pure.string(site_name),
+      tx.pure.string(favicon_url),
+    ],
   })
 
   return tx
@@ -55,6 +61,7 @@ export function create_site_transaction({
  * @param {string|number} params.initial_shared_version - Initial shared version of Site object
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.quilt_patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
+ * @param {string} params.blob_object_id - Walrus blob object ID for renewal tracking
  * @returns {Transaction} Configured transaction object
  */
 export function add_resources_transaction({
@@ -65,6 +72,7 @@ export function add_resources_transaction({
   initial_shared_version,
   quilt_patches,
   file_metadata,
+  blob_object_id,
 }) {
   const tx = new Transaction()
   tx.setSender(wallet)
@@ -93,6 +101,7 @@ export function add_resources_transaction({
         }), // Shared Site reference (mutable shared object)
         tx.pure.string(full_path),
         tx.pure.string(patch.quiltPatchId),
+        tx.pure.id(blob_object_id), // Blob object ID for renewal tracking
         tx.pure.vector('u8', Array.from(fromBase64(info.hash))),
         tx.pure.string(info.content_type),
         tx.pure.u64(info.size),

@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execSync, spawnSync } from 'node:child_process'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import { Transaction } from '@mysten/sui/transactions'
@@ -170,12 +170,20 @@ async function execute_transaction(tx, client) {
   const tx_bytes = await tx.build({ client })
   const tx_base64 = toBase64(tx_bytes)
 
-  const output = execSync(`sui client serialized-tx ${tx_base64} --json`, {
+  const result = spawnSync('sui', ['client', 'serialized-tx', tx_base64, '--json'], {
     encoding: 'utf8',
     stdio: ['inherit', 'pipe', 'pipe'],
   })
 
-  return JSON.parse(output)
+  if (result.error) {
+    throw result.error
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`sui command failed with status ${result.status}`)
+  }
+
+  return JSON.parse(result.stdout)
 }
 
 /**

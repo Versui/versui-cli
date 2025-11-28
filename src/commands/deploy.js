@@ -546,6 +546,8 @@ export async function deploy(dir, options = {}) {
     const sui_client = new SuiClient({ url: rpc_url })
 
     // Fetch wallet balances
+    state.spinner_text = 'Fetching wallet balances...'
+    update_display()
     const { sui, wal } = await get_wallet_balances(
       state.wallet,
       network,
@@ -553,6 +555,7 @@ export async function deploy(dir, options = {}) {
     )
     state.sui_balance = sui
     state.wal_balance = wal
+    state.spinner_text = null
 
     // Clear screen and show progress tracker
     console.clear()
@@ -577,10 +580,14 @@ export async function deploy(dir, options = {}) {
     update_display()
 
     // Get cost estimate
+    state.spinner_text = 'Estimating storage costs...'
+    update_display()
     state.walrus_cost = await get_walrus_price_estimate(
       state.total_size,
       epochs,
     )
+    state.spinner_text = null
+    update_display()
 
     // Confirm Walrus upload
     state.step = 'walrus'
@@ -617,7 +624,16 @@ export async function deploy(dir, options = {}) {
     state.blob_id =
       blob_store?.newlyCreated?.blobObject?.blobId ||
       blob_store?.alreadyCertified?.blobId
+    const blob_object_id =
+      blob_store?.newlyCreated?.blobObject?.blobObjectId ||
+      blob_store?.alreadyCertified?.object
     const quilt_patches = quilt_result.storedQuiltBlobs || []
+
+    if (!blob_object_id) {
+      throw new Error(
+        'Failed to extract blob object ID from Walrus upload result',
+      )
+    }
 
     state.spinner_text = null
     state.upload_progress = 0
@@ -733,6 +749,7 @@ export async function deploy(dir, options = {}) {
       initial_shared_version,
       quilt_patches,
       file_metadata,
+      blob_object_id,
     })
 
     const tx2_bytes = await tx2.build({ client: sui_client })
@@ -1069,7 +1086,16 @@ async function deploy_json(dir, options) {
   const blob_id =
     blob_store?.newlyCreated?.blobObject?.blobId ||
     blob_store?.alreadyCertified?.blobId
+  const blob_object_id =
+    blob_store?.newlyCreated?.blobObject?.blobObjectId ||
+    blob_store?.alreadyCertified?.object
   const patches = quilt.storedQuiltBlobs || []
+
+  if (!blob_object_id) {
+    throw new Error(
+      'Failed to extract blob object ID from Walrus upload result',
+    )
+  }
 
   const sui_client = new SuiClient({
     url: getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet'),
@@ -1080,6 +1106,11 @@ async function deploy_json(dir, options) {
     throw new Error(`Versui package not deployed on ${network} yet`)
   }
 
+  const versui_object_id = get_versui_registry_id(network)
+  if (!versui_object_id) {
+    throw new Error(`Versui registry not deployed on ${network} yet`)
+  }
+
   // === TRANSACTION 1: Create Site ===
   const tx1 = new Transaction()
   tx1.setSender(wallet)
@@ -1087,7 +1118,11 @@ async function deploy_json(dir, options) {
   // create_site returns AdminCap to sender, creates shared Site
   tx1.moveCall({
     target: `${package_id}::site::create_site`,
-    arguments: [tx1.pure.string(site_name)],
+    arguments: [
+      tx1.object(versui_object_id),
+      tx1.pure.string(site_name),
+      tx1.pure.string(''),
+    ],
   })
 
   const tx1_bytes = await tx1.build({ client: sui_client })
@@ -1150,7 +1185,8 @@ async function deploy_json(dir, options) {
         tx2.object(site_id), // Shared Site reference
         tx2.pure.string(full_path),
         tx2.pure.string(patch.quiltPatchId),
-        tx2.pure.vector('u8', Array.from(fromBase64(info.hash))),
+        tx2.pure.id(blob_object_id), // Blob object ID for renewal tracking
+        tx2.pure.vector('u8', Array.from(Buffer.from(info.hash, 'hex'))),
         tx2.pure.string(info.content_type),
         tx2.pure.u64(info.size),
       ],

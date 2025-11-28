@@ -9,7 +9,7 @@
 </p>
 
 ```bash
-npm i -g versui
+npm i -g @versui/cli
 versui deploy dist
 ```
 
@@ -41,6 +41,10 @@ versui delete <site-id>
 
 # Regenerate bootstrap or service worker
 versui regenerate <site-id>
+
+# Renew blob storage (extend expiration)
+versui renew <site-id>
+versui renew <site-id> --epochs 10 --yes --json
 
 # Custom domains
 versui domain add example.com --site <site-id>
