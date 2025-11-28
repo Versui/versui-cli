@@ -414,3 +414,70 @@ export async function build_delete_transaction(
     tx_bytes_base64: Buffer.from(tx_bytes).toString('base64'),
   }
 }
+
+/**
+ * Look up Site ID by site name using Versui registry
+ * Calls the Move view function get_site_id(owner, name)
+ * @param {Object} client - Sui client
+ * @param {string} versui_object_id - Shared Versui registry object ID
+ * @param {string} owner_address - Owner wallet address
+ * @param {string} site_name - Site name to look up
+ * @param {string} network - Network (testnet|mainnet)
+ * @returns {Promise<string|null>} Site ID or null if not found
+ */
+export async function get_site_id_by_name(
+  client,
+  versui_object_id,
+  owner_address,
+  site_name,
+  network = 'testnet',
+) {
+  const package_id = get_versui_package_id(network)
+  if (!package_id) {
+    throw new Error(`Versui package not deployed on ${network}`)
+  }
+
+  const tx = new Transaction()
+
+  // Call get_site_id view function
+  tx.moveCall({
+    target: `${package_id}::versui::get_site_id`,
+    arguments: [
+      tx.object(versui_object_id), // Shared Versui registry
+      tx.pure.address(owner_address),
+      tx.pure.string(site_name),
+    ],
+  })
+
+  // Execute as dev inspect (no gas cost, read-only)
+  const result = await client.devInspectTransactionBlock({
+    transactionBlock: tx,
+    sender: owner_address,
+  })
+
+  // Check for execution errors
+  if (result.error || result.effects.status.status !== 'success') {
+    const error_msg = result.error || 'Transaction failed'
+    throw new Error(`Failed to query site ID: ${error_msg}`)
+  }
+
+  // Parse return value (Option<ID>)
+  // returnValues is array of [bytes, type] tuples
+  const return_values = result.results?.[0]?.returnValues
+  if (!return_values || return_values.length === 0) {
+    return null
+  }
+
+  const [bytes_array, type_str] = return_values[0]
+
+  // Check if Option is None (empty vector)
+  if (!bytes_array || bytes_array.length === 0) {
+    return null
+  }
+
+  // Parse bytes to object ID (ID is 32 bytes address)
+  // Convert bytes to hex string with 0x prefix
+  const site_id = '0x' + Buffer.from(bytes_array).toString('hex')
+
+  return site_id
+}

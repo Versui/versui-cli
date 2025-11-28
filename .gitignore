@@ -44,3 +44,9 @@ coverage/
 *.tmp
 .cache/
 tsconfig.tsbuildinfo
+
+# Test files
+test/
+test-site/
+test-premium-tx.js
+SPEC.md

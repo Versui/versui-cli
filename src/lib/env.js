@@ -4,7 +4,23 @@
  */
 
 const V10_PACKAGE_ID =
-  '0x33ae55f9781df0d89a9b16b091daa8c8ee826638caca2e68604b1647fd0e84e2'
+  '0x9922ed554edda60ee0757de6bcc4662df3eda9a918e2f108e0c06a6ca2934d44'
+
+/**
+ * Original package ID (V9 and earlier)
+ * Used for type filtering since existing objects still reference this package
+ */
+const ORIGINAL_PACKAGE_ID =
+  '0x824052b308a7edad4ef16eef0f4f724786577f7fef68b6dddeeba8006ead9eb8'
+
+/**
+ * Shared Versui registry object IDs by network
+ * This is the shared object that maintains the owner->name->site_id mapping
+ */
+const VERSUI_REGISTRY_IDS = {
+  testnet: process.env.VERSUI_OBJECT_ID_TESTNET || null,
+  mainnet: process.env.VERSUI_OBJECT_ID_MAINNET || null,
+}
 
 /**
  * Validates Sui package ID format
@@ -47,10 +63,33 @@ export const VERSUI_PACKAGE_IDS = {
 }
 
 /**
- * Get package ID for network
+ * Get package ID for network (for function calls)
  * @param {string} network - Network name (testnet|mainnet)
  * @returns {string|null} Package ID or null if not deployed
  */
 export function get_versui_package_id(network) {
   return VERSUI_PACKAGE_IDS[network]
+}
+
+/**
+ * Get original package ID for network (for type filtering)
+ * Used to query objects that were created with the original package
+ * @param {string} network - Network name (testnet|mainnet)
+ * @returns {string|null} Original package ID or null if not deployed
+ */
+export function get_original_package_id(network) {
+  // For now, only testnet has the original package deployed
+  if (network === 'testnet') {
+    return ORIGINAL_PACKAGE_ID
+  }
+  return null
+}
+
+/**
+ * Get shared Versui registry object ID for network
+ * @param {string} network - Network name (testnet|mainnet)
+ * @returns {string|null} Registry object ID or null if not deployed
+ */
+export function get_versui_registry_id(network) {
+  return VERSUI_REGISTRY_IDS[network]
 }

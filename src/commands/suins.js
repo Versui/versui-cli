@@ -14,7 +14,7 @@ import {
   normalize_suins_name,
   get_suins_client,
 } from '../lib/suins.js'
-import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
+import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
 
 /**
  * Get active Sui network from CLI
@@ -76,11 +76,11 @@ async function get_site_info(site_id, client) {
  * Get user's sites (returns site IDs with names)
  * @param {string} address - Wallet address
  * @param {import('@mysten/sui/client').SuiClient} client - Sui client
- * @param {string} package_id - Versui package ID
+ * @param {string} original_package_id - Original package ID (for type filtering)
  * @returns {Promise<Array<{ id: string, name: string }>>}
  */
-async function get_user_sites(address, client, package_id) {
-  const admin_cap_type = `${package_id}::site::SiteAdminCap`
+async function get_user_sites(address, client, original_package_id) {
+  const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
   const admin_caps = await client.getOwnedObjects({
     owner: address,
     filter: { StructType: admin_cap_type },
@@ -115,10 +115,17 @@ export async function suins_add(name, options = {}) {
   try {
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = VERSUI_PACKAGE_IDS[network]
+    const package_id = get_versui_package_id(network)
+    const original_package_id = get_original_package_id(network)
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
+    }
+
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+      )
     }
 
     const sui_client = new SuiClient({
@@ -148,7 +155,11 @@ export async function suins_add(name, options = {}) {
     let site_id = options.site
     if (!site_id) {
       spinner.start('Finding your sites...')
-      const sites = await get_user_sites(address, sui_client, package_id)
+      const sites = await get_user_sites(
+        address,
+        sui_client,
+        original_package_id,
+      )
       spinner.stop()
 
       if (sites.length === 0) {
@@ -246,10 +257,17 @@ export async function suins_list(options = {}) {
   try {
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = VERSUI_PACKAGE_IDS[network]
+    const package_id = get_versui_package_id(network)
+    const original_package_id = get_original_package_id(network)
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
+    }
+
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+      )
     }
 
     const sui_client = new SuiClient({
@@ -278,7 +296,7 @@ export async function suins_list(options = {}) {
 
     // Get user's sites for matching
     spinner.start('Checking linked sites...')
-    const sites = await get_user_sites(address, sui_client, package_id)
+    const sites = await get_user_sites(address, sui_client, original_package_id)
     const site_map = new Map(sites.map(s => [s.id, s.name]))
     spinner.stop()
 

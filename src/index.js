@@ -122,6 +122,10 @@ program
 const domain_cmd = program
   .command('domain')
   .description('Manage custom domains')
+  .action(() => {
+    // Show help when called without subcommand
+    domain_cmd.help()
+  })
 
 domain_cmd
   .command('add')
@@ -168,6 +172,10 @@ domain_cmd
 const suins_cmd = program
   .command('suins')
   .description('Manage SuiNS name linking')
+  .action(() => {
+    // Show help when called without subcommand
+    suins_cmd.help()
+  })
 
 suins_cmd
   .command('add')

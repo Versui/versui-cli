@@ -8,7 +8,7 @@ import ora from 'ora'
 import prompts from 'prompts'
 import Table from 'cli-table3'
 
-import { VERSUI_PACKAGE_IDS } from '../lib/env.js'
+import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
 
 // DomainRegistry shared object IDs (deployed via domain_registry.move init)
 const DOMAIN_REGISTRY_IDS = {
@@ -115,11 +115,11 @@ function validate_domain_format(domain) {
  * @param {string} site_id - Site object ID
  * @param {string} address - Wallet address
  * @param {import('@mysten/sui/client').SuiClient} client - Sui client
- * @param {string} package_id - Versui package ID
+ * @param {string} original_package_id - Original package ID (for type filtering)
  * @returns {Promise<string|null>} AdminCap object ID or null
  */
-async function find_admin_cap(site_id, address, client, package_id) {
-  const admin_cap_type = `${package_id}::site::SiteAdminCap`
+async function find_admin_cap(site_id, address, client, original_package_id) {
+  const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
   const admin_caps = await client.getOwnedObjects({
     owner: address,
     filter: {
@@ -142,50 +142,22 @@ async function find_admin_cap(site_id, address, client, package_id) {
 }
 
 /**
- * Get Site object info including initial shared version
+ * Get Site object name
  * @param {string} site_id - Site object ID
  * @param {import('@mysten/sui/client').SuiClient} client - Sui client
- * @returns {Promise<{ initial_shared_version: string, name: string } | null>}
+ * @returns {Promise<string | null>} Site name or null
  */
-async function get_site_info(site_id, client) {
+async function get_site_name(site_id, client) {
   const site_obj = await client.getObject({
     id: site_id,
     options: {
       showContent: true,
-      showOwner: true,
     },
   })
 
   if (!site_obj?.data) return null
 
-  const initial_shared_version = /** @type {any} */ (site_obj.data.owner)
-    ?.Shared?.initial_shared_version
-  const name =
-    /** @type {any} */ (site_obj.data.content)?.fields?.name || 'Unnamed'
-
-  if (!initial_shared_version) return null
-
-  return { initial_shared_version, name }
-}
-
-/**
- * Get DomainRegistry info including initial shared version
- * @param {string} registry_id - DomainRegistry object ID
- * @param {import('@mysten/sui/client').SuiClient} client - Sui client
- * @returns {Promise<string | null>} initial_shared_version or null
- */
-async function get_registry_version(registry_id, client) {
-  const registry_obj = await client.getObject({
-    id: registry_id,
-    options: {
-      showOwner: true,
-    },
-  })
-
-  if (!registry_obj?.data) return null
-
-  return /** @type {any} */ (registry_obj.data.owner)?.Shared
-    ?.initial_shared_version
+  return /** @type {any} */ (site_obj.data.content)?.fields?.name || 'Unnamed'
 }
 
 /**
@@ -226,11 +198,18 @@ export async function domain_add(domain, options = {}) {
     // Get network and wallet
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = VERSUI_PACKAGE_IDS[network]
+    const package_id = get_versui_package_id(network)
+    const original_package_id = get_original_package_id(network)
     const registry_id = DOMAIN_REGISTRY_IDS[network]
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
+    }
+
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+      )
     }
 
     if (!registry_id) {
@@ -249,7 +228,7 @@ export async function domain_add(domain, options = {}) {
     if (!site_id) {
       // List user's sites and let them choose
       spinner.start('Finding your sites...')
-      const admin_cap_type = `${package_id}::site::SiteAdminCap`
+      const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
       const admin_caps = await client.getOwnedObjects({
         owner: address,
         filter: { StructType: admin_cap_type },
@@ -270,9 +249,9 @@ export async function domain_add(domain, options = {}) {
           ?.site_id
         if (!cap_site_id) continue
 
-        const site_info = await get_site_info(cap_site_id, client)
+        const site_name = await get_site_name(cap_site_id, client)
         site_choices.push({
-          title: `${site_info?.name || 'Unnamed'} (${cap_site_id.slice(0, 10)}...)`,
+          title: `${site_name || 'Unnamed'} (${cap_site_id.slice(0, 10)}...)`,
           value: cap_site_id,
         })
       }
@@ -292,14 +271,14 @@ export async function domain_add(domain, options = {}) {
       site_id = selected_site_id
     }
 
-    // Get site info
+    // Get site name
     spinner.start('Querying site...')
-    const site_info = await get_site_info(site_id, client)
-    if (!site_info) {
-      spinner.fail('Site not found or not a shared object')
+    const site_name = await get_site_name(site_id, client)
+    if (!site_name) {
+      spinner.fail('Site not found')
       throw new Error(`Site ${site_id} not found`)
     }
-    spinner.succeed(`Site: ${site_info.name}`)
+    spinner.succeed(`Site: ${site_name}`)
 
     // Find AdminCap
     spinner.start('Finding AdminCap...')
@@ -307,7 +286,7 @@ export async function domain_add(domain, options = {}) {
       site_id,
       address,
       client,
-      package_id,
+      original_package_id,
     )
     if (!admin_cap_id) {
       spinner.fail('AdminCap not found')
@@ -317,15 +296,6 @@ export async function domain_add(domain, options = {}) {
     }
     spinner.succeed('AdminCap found')
 
-    // Get registry version
-    spinner.start('Querying DomainRegistry...')
-    const registry_version = await get_registry_version(registry_id, client)
-    if (!registry_version) {
-      spinner.fail('DomainRegistry not found')
-      throw new Error('DomainRegistry object not found on network')
-    }
-    spinner.succeed('DomainRegistry ready')
-
     // Build transaction
     spinner.start('Building transaction...')
     const tx = new Transaction()
@@ -334,17 +304,9 @@ export async function domain_add(domain, options = {}) {
     tx.moveCall({
       target: `${package_id}::domain_registry::add_custom_domain`,
       arguments: [
-        tx.sharedObjectRef({
-          objectId: registry_id,
-          initialSharedVersion: registry_version,
-          mutable: true,
-        }),
+        tx.object(registry_id),
         tx.object(admin_cap_id),
-        tx.sharedObjectRef({
-          objectId: site_id,
-          initialSharedVersion: site_info.initial_shared_version,
-          mutable: false,
-        }),
+        tx.object(site_id),
         tx.pure.string(domain),
         tx.object(CLOCK_OBJECT_ID),
       ],
@@ -397,11 +359,18 @@ export async function domain_remove(domain, options = {}) {
     // Get network and wallet
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = VERSUI_PACKAGE_IDS[network]
+    const package_id = get_versui_package_id(network)
+    const original_package_id = get_original_package_id(network)
     const registry_id = DOMAIN_REGISTRY_IDS[network]
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
+    }
+
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+      )
     }
 
     if (!registry_id) {
@@ -420,7 +389,7 @@ export async function domain_remove(domain, options = {}) {
     if (!site_id) {
       // List user's sites and let them choose
       spinner.start('Finding your sites...')
-      const admin_cap_type = `${package_id}::site::SiteAdminCap`
+      const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
       const admin_caps = await client.getOwnedObjects({
         owner: address,
         filter: { StructType: admin_cap_type },
@@ -439,9 +408,9 @@ export async function domain_remove(domain, options = {}) {
           ?.site_id
         if (!cap_site_id) continue
 
-        const site_info = await get_site_info(cap_site_id, client)
+        const site_name = await get_site_name(cap_site_id, client)
         site_choices.push({
-          title: `${site_info?.name || 'Unnamed'} (${cap_site_id.slice(0, 10)}...)`,
+          title: `${site_name || 'Unnamed'} (${cap_site_id.slice(0, 10)}...)`,
           value: cap_site_id,
         })
       }
@@ -461,14 +430,14 @@ export async function domain_remove(domain, options = {}) {
       site_id = selected_site_id
     }
 
-    // Get site info
+    // Get site name
     spinner.start('Querying site...')
-    const site_info = await get_site_info(site_id, client)
-    if (!site_info) {
+    const site_name = await get_site_name(site_id, client)
+    if (!site_name) {
       spinner.fail('Site not found')
       throw new Error(`Site ${site_id} not found`)
     }
-    spinner.succeed(`Site: ${site_info.name}`)
+    spinner.succeed(`Site: ${site_name}`)
 
     // Find AdminCap
     spinner.start('Finding AdminCap...')
@@ -476,7 +445,7 @@ export async function domain_remove(domain, options = {}) {
       site_id,
       address,
       client,
-      package_id,
+      original_package_id,
     )
     if (!admin_cap_id) {
       spinner.fail('AdminCap not found')
@@ -486,15 +455,6 @@ export async function domain_remove(domain, options = {}) {
     }
     spinner.succeed('AdminCap found')
 
-    // Get registry version
-    spinner.start('Querying DomainRegistry...')
-    const registry_version = await get_registry_version(registry_id, client)
-    if (!registry_version) {
-      spinner.fail('DomainRegistry not found')
-      throw new Error('DomainRegistry object not found on network')
-    }
-    spinner.succeed('DomainRegistry ready')
-
     // Build transaction
     spinner.start('Building transaction...')
     const tx = new Transaction()
@@ -503,17 +463,9 @@ export async function domain_remove(domain, options = {}) {
     tx.moveCall({
       target: `${package_id}::domain_registry::remove_custom_domain`,
       arguments: [
-        tx.sharedObjectRef({
-          objectId: registry_id,
-          initialSharedVersion: registry_version,
-          mutable: true,
-        }),
+        tx.object(registry_id),
         tx.object(admin_cap_id),
-        tx.sharedObjectRef({
-          objectId: site_id,
-          initialSharedVersion: site_info.initial_shared_version,
-          mutable: false,
-        }),
+        tx.object(site_id),
         tx.pure.string(domain),
       ],
     })
@@ -554,10 +506,17 @@ export async function domain_list(options = {}) {
     // Get network and wallet
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = VERSUI_PACKAGE_IDS[network]
+    const package_id = get_versui_package_id(network)
+    const original_package_id = get_original_package_id(network)
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
+    }
+
+    if (!original_package_id) {
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query existing objects.`,
+      )
     }
 
     // Create Sui client
@@ -567,7 +526,7 @@ export async function domain_list(options = {}) {
 
     // Get user's sites first
     spinner.start('Finding your sites...')
-    const admin_cap_type = `${package_id}::site::SiteAdminCap`
+    const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
     const admin_caps = await client.getOwnedObjects({
       owner: address,
       filter: { StructType: admin_cap_type },
@@ -592,8 +551,8 @@ export async function domain_list(options = {}) {
       user_site_ids.add(site_id)
 
       // Get site name
-      const site_info = await get_site_info(site_id, client)
-      site_names.set(site_id, site_info?.name || 'Unnamed')
+      const site_name = await get_site_name(site_id, client)
+      site_names.set(site_id, site_name || 'Unnamed')
     }
     spinner.succeed(`Found ${user_site_ids.size} site(s)`)
 
