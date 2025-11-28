@@ -190,85 +190,67 @@ export async function delete_site(site_identifiers, options = {}) {
     }
   }
 
-  lookup_spinner.succeed(
-    `Resolved ${ids_to_delete.length} site${ids_to_delete.length > 1 ? 's' : ''}`,
-  )
+  lookup_spinner.text = 'Validating sites...'
 
-  try {
-    // Confirmation prompt (unless --yes flag)
-    if (!options.yes) {
-      console.log('')
-      console.log(chalk.yellow('⚠️  Warning: This action cannot be undone!'))
-      console.log('')
-      console.log(`  Network: ${chalk.cyan(network)}`)
-      console.log(
-        `  Site${ids_to_delete.length > 1 ? 's' : ''} to delete: ${chalk.cyan(ids_to_delete.length)}`,
-      )
-      console.log('')
-      for (const id of ids_to_delete) {
-        console.log(`    ${chalk.dim(id)}`)
-      }
-      console.log('')
+  // Validate all sites exist and get AdminCaps BEFORE confirmation
+  const package_id = get_versui_package_id(network)
+  if (!package_id) {
+    lookup_spinner.fail(`Versui package not deployed on ${network}`)
+    throw new Error(`Versui package not deployed on ${network} yet`)
+  }
 
-      const response = await prompts({
-        type: 'confirm',
-        name: 'confirmed',
-        message: `Delete ${ids_to_delete.length} site${ids_to_delete.length > 1 ? 's' : ''}?`,
-        initial: false,
+  const original_package_id = get_original_package_id(network)
+  if (!original_package_id) {
+    lookup_spinner.fail(`Original Versui package not found on ${network}`)
+    throw new Error(
+      `Original Versui package not found on ${network}. Cannot query AdminCaps.`,
+    )
+  }
+
+  const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
+  const admin_caps = await client.getOwnedObjects({
+    owner: address,
+    filter: {
+      StructType: admin_cap_type,
+    },
+    options: {
+      showContent: true,
+    },
+  })
+
+  // Validate each site exists and user has AdminCap
+  const validated_sites = []
+  for (const site_id of ids_to_delete) {
+    // Check if Site object exists
+    try {
+      const site_obj = await client.getObject({
+        id: site_id,
+        options: {
+          showContent: true,
+          showOwner: true,
+        },
       })
 
-      if (!response.confirmed) {
-        console.log('')
-        console.log(chalk.gray('  Deletion cancelled.'))
-        console.log('')
-        return
+      if (!site_obj?.data) {
+        lookup_spinner.fail(
+          `Site ${site_id.slice(0, 10)}... does not exist on ${network}`,
+        )
+        throw new Error(
+          `Site ${site_id} does not exist on ${network}. Check the site ID or name.`,
+        )
       }
-    }
 
-    // Query all AdminCaps once (shared across all deletions)
-    const spinner = ora('Finding AdminCaps...').start()
+      // Check if it's a shared object
+      const initial_shared_version = /** @type {any} */ (site_obj.data.owner)
+        ?.Shared?.initial_shared_version
+      if (!initial_shared_version) {
+        lookup_spinner.fail(
+          `${site_id.slice(0, 10)}... is not a shared Site object`,
+        )
+        throw new Error(`${site_id} is not a valid Site object (not shared)`)
+      }
 
-    // Use V10 package ID for function calls
-    const package_id = get_versui_package_id(network)
-    if (!package_id) {
-      throw new Error(`Versui package not deployed on ${network} yet`)
-    }
-
-    // Use original package ID for type queries (existing objects have old type)
-    const original_package_id = get_original_package_id(network)
-    if (!original_package_id) {
-      throw new Error(
-        `Original Versui package not found on ${network}. Cannot query AdminCaps.`,
-      )
-    }
-
-    const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
-    const admin_caps = await client.getOwnedObjects({
-      owner: address,
-      filter: {
-        StructType: admin_cap_type,
-      },
-      options: {
-        showContent: true,
-      },
-    })
-    spinner.succeed(`Found ${admin_caps.data.length} AdminCap(s)`)
-
-    console.log('')
-
-    // Process each site deletion
-    for (let idx = 0; idx < ids_to_delete.length; idx++) {
-      const site_id = ids_to_delete[idx]
-      const site_num = idx + 1
-      const total = ids_to_delete.length
-
-      console.log(
-        chalk.dim(
-          `[${site_num}/${total}] Deleting site: ${site_id.slice(0, 10)}...`,
-        ),
-      )
-
-      // Find AdminCap matching this site_id
+      // Find matching AdminCap
       let admin_cap_id = null
       for (const item of admin_caps.data) {
         if (!item.data?.content) continue
@@ -280,48 +262,79 @@ export async function delete_site(site_identifiers, options = {}) {
       }
 
       if (!admin_cap_id) {
-        console.log(
-          chalk.yellow(
-            `  ⚠ Skipping ${site_id.slice(0, 10)}... - AdminCap not found (may not own this site)`,
-          ),
+        lookup_spinner.fail(
+          `No AdminCap found for site ${site_id.slice(0, 10)}...`,
         )
-        continue
+        throw new Error(
+          `You do not own AdminCap for site ${site_id}. Cannot delete sites you don't own.`,
+        )
       }
 
-      // Validate admin_cap_id format
-      if (!is_valid_sui_object_id(admin_cap_id)) {
-        console.log(
-          chalk.yellow(
-            `  ⚠ Skipping ${site_id.slice(0, 10)}... - Invalid AdminCap ID format`,
-          ),
-        )
-        continue
-      }
+      validated_sites.push({
+        site_id,
+        admin_cap_id,
+        site_obj,
+      })
+    } catch (error) {
+      // Preserve original error if already thrown above
+      if (error.message.includes('does not exist')) throw error
+      if (error.message.includes('not a valid Site')) throw error
+      if (error.message.includes('do not own AdminCap')) throw error
 
-      // Query Site object to get initial shared version
-      const site_spinner = ora('Querying Site object...').start()
-      const site_obj = await client.getObject({
-        id: site_id,
-        options: {
-          showContent: true,
-          showOwner: true,
-        },
+      // Unknown error during validation
+      lookup_spinner.fail(`Failed to validate site ${site_id.slice(0, 10)}...`)
+      throw new Error(`Failed to validate site ${site_id}: ${error.message}`)
+    }
+  }
+
+  lookup_spinner.succeed(
+    `Validated ${validated_sites.length} site${validated_sites.length > 1 ? 's' : ''} (all owned by you)`,
+  )
+
+  try {
+    // Confirmation prompt (unless --yes flag)
+    if (!options.yes) {
+      console.log('')
+      console.log(chalk.yellow('⚠️  Warning: This action cannot be undone!'))
+      console.log('')
+      console.log(`  Network: ${chalk.cyan(network)}`)
+      console.log(
+        `  Site${validated_sites.length > 1 ? 's' : ''} to delete: ${chalk.cyan(validated_sites.length)}`,
+      )
+      console.log('')
+      for (const { site_id } of validated_sites) {
+        console.log(`    ${chalk.dim(site_id)}`)
+      }
+      console.log('')
+
+      const response = await prompts({
+        type: 'confirm',
+        name: 'confirmed',
+        message: `Delete ${validated_sites.length} site${validated_sites.length > 1 ? 's' : ''}?`,
+        initial: false,
       })
 
-      if (!site_obj?.data) {
-        site_spinner.fail(`Failed to query Site object`)
-        continue
+      if (!response.confirmed) {
+        console.log('')
+        console.log(chalk.gray('  Deletion cancelled.'))
+        console.log('')
+        return
       }
+    }
 
-      // Extract initial_shared_version from owner field
-      const initial_shared_version = /** @type {any} */ (site_obj.data.owner)
-        ?.Shared?.initial_shared_version
-      if (!initial_shared_version) {
-        site_spinner.fail('Site is not a shared object')
-        continue
-      }
+    console.log('')
 
-      site_spinner.succeed('Site object queried')
+    // Process each site deletion
+    for (let idx = 0; idx < validated_sites.length; idx++) {
+      const { site_id, admin_cap_id, site_obj } = validated_sites[idx]
+      const site_num = idx + 1
+      const total = validated_sites.length
+
+      console.log(
+        chalk.dim(
+          `[${site_num}/${total}] Deleting site: ${site_id.slice(0, 10)}...`,
+        ),
+      )
 
       // Extract resources Table ID from Site object
       const site_fields = /** @type {any} */ (site_obj.data.content).fields
@@ -522,7 +535,7 @@ export async function delete_site(site_identifiers, options = {}) {
     console.log('')
     console.log(
       chalk.green(
-        `  ✓ Deletion complete! Processed ${ids_to_delete.length} site${ids_to_delete.length > 1 ? 's' : ''}`,
+        `  ✓ Deletion complete! Processed ${validated_sites.length} site${validated_sites.length > 1 ? 's' : ''}`,
       ),
     )
     console.log('')
