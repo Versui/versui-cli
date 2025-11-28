@@ -5,7 +5,12 @@ import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
 
-import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
+import {
+  get_versui_package_id,
+  get_original_package_id,
+  get_versui_registry_id,
+} from '../lib/env.js'
+import { get_site_id_by_name } from '../lib/sui.js'
 
 /**
  * Validate Sui object ID format (0x followed by 64 hex chars)
@@ -17,44 +22,90 @@ function is_valid_sui_object_id(id) {
 }
 
 /**
- * Validate resource path (optional leading /, no shell metacharacters)
+ * Validate resource path (optional leading /, no shell injection characters)
  * @param {string} path - Resource path to validate
  * @returns {boolean} True if valid
  */
 function is_valid_resource_path(path) {
-  // Block shell metacharacters: ; | & $ ` \ " ' < > ( ) [ ] { } * ? ! ~
-  if (/[;|&$`\\"'<>()[\]{}*?!~]/.test(path)) return false
+  // Block shell injection characters: ; | ` $ (command substitution)
+  // Allow web-standard characters: ? & (query strings), [] {} (URLs), etc.
+  if (/[;|`$]|<\(|\$\(/.test(path)) return false
   return true
 }
 
 /**
  * Delete one or more site deployments
- * @param {string | string[]} site_ids - Site object ID(s) to delete
+ * @param {string | string[]} site_identifiers - Site object ID(s) or name(s) to delete
  * @param {Object} options - Command options
  * @param {boolean} [options.yes] - Skip confirmation prompt
  * @param {string} [options.network] - Network (testnet|mainnet)
  * @returns {Promise<void>}
  */
-export async function delete_site(site_ids, options = {}) {
-  // Convert single ID to array for uniform processing
-  const ids_to_delete = Array.isArray(site_ids) ? site_ids : [site_ids]
+export async function delete_site(site_identifiers, options = {}) {
+  // Convert single identifier to array for uniform processing
+  const identifiers = Array.isArray(site_identifiers)
+    ? site_identifiers
+    : [site_identifiers]
 
-  // Validate all site IDs before processing
-  for (const site_id of ids_to_delete) {
-    if (!is_valid_sui_object_id(site_id)) {
-      throw new Error(
-        `Invalid site ID format: ${site_id}. Must be 0x followed by 64 hex characters.`,
+  // Get network early for lookups
+  const network = options.network || get_active_network()
+  const address = get_active_address()
+
+  // Create Sui client for lookups
+  const client = new SuiClient({
+    url: getFullnodeUrl(/** @type {any} */ (network)),
+  })
+
+  // Resolve all identifiers to site IDs
+  const ids_to_delete = []
+  let lookup_spinner = ora('Resolving site identifiers...').start()
+
+  for (const identifier of identifiers) {
+    // If it looks like a Sui object ID, use directly
+    if (is_valid_sui_object_id(identifier)) {
+      ids_to_delete.push(identifier)
+      continue
+    }
+
+    // Otherwise, treat as site name and look up
+    const registry_id = get_versui_registry_id(network)
+    if (!registry_id) {
+      lookup_spinner.fail(
+        `Site name lookup not available on ${network} (registry not deployed)`,
       )
+      throw new Error(
+        `Cannot resolve site name "${identifier}" - registry not available. Use site ID instead.`,
+      )
+    }
+
+    try {
+      const site_id = await get_site_id_by_name(
+        client,
+        registry_id,
+        address,
+        identifier,
+        network,
+      )
+
+      if (!site_id) {
+        lookup_spinner.fail(`Site not found: "${identifier}"`)
+        throw new Error(
+          `No site found with name "${identifier}" owned by ${address}`,
+        )
+      }
+
+      ids_to_delete.push(site_id)
+    } catch (error) {
+      lookup_spinner.fail(`Failed to resolve site name: "${identifier}"`)
+      throw error
     }
   }
 
+  lookup_spinner.succeed(
+    `Resolved ${ids_to_delete.length} site${ids_to_delete.length > 1 ? 's' : ''}`,
+  )
+
   try {
-    // Get network
-    const network = options.network || get_active_network()
-
-    // Get wallet address
-    const address = get_active_address()
-
     // Confirmation prompt (unless --yes flag)
     if (!options.yes) {
       console.log('')
@@ -84,11 +135,6 @@ export async function delete_site(site_ids, options = {}) {
         return
       }
     }
-
-    // Create Sui client
-    const client = new SuiClient({
-      url: getFullnodeUrl(/** @type {any} */ (network)),
-    })
 
     // Query all AdminCaps once (shared across all deletions)
     const spinner = ora('Finding AdminCaps...').start()
@@ -246,6 +292,9 @@ export async function delete_site(site_ids, options = {}) {
           ).start()
 
           try {
+            // Dynamic gas budget: 1M base + 1M per resource (min 50M)
+            const gas_budget = Math.max(50_000_000, 1_000_000 + paths_to_delete.length * 1_000_000)
+
             const result = spawnSync(
               'sui',
               [
@@ -262,7 +311,7 @@ export async function delete_site(site_ids, options = {}) {
                 site_id,
                 JSON.stringify(paths_to_delete),
                 '--gas-budget',
-                '50000000',
+                gas_budget.toString(),
               ],
               { encoding: 'utf-8' },
             )
@@ -272,14 +321,19 @@ export async function delete_site(site_ids, options = {}) {
             }
 
             const stdout = result.stdout || ''
+            const stderr = result.stderr || ''
+
             if (!stdout.includes('Status: Success')) {
-              del_spinner.fail(
-                `Failed to delete resources (check gas budget or Move execution)`,
-              )
+              // Extract Move error from stderr
+              const error_detail = stderr.trim() || stdout.trim()
+              del_spinner.fail(`Failed to delete resources`)
+              console.log('')
+              console.log(chalk.yellow(`  Error details:`))
+              console.log(chalk.dim(`  ${error_detail}`))
               console.log('')
             } else {
               del_spinner.succeed(
-                `Deleted ${paths_to_delete.length} resource(s) in 1 transaction`,
+                `Deleted ${paths_to_delete.length} resource(s) in 1 transaction (gas: ${gas_budget.toLocaleString()})`,
               )
             }
           } catch (error) {
@@ -318,16 +372,27 @@ export async function delete_site(site_ids, options = {}) {
         }
 
         const stdout = result.stdout || ''
+        const stderr = result.stderr || ''
+
         // Check for success
         if (stdout.includes('Status: Success')) {
           delete_spinner.succeed(
             chalk.green(`✓ Deleted: ${site_id.slice(0, 10)}...`),
           )
         } else {
+          // Extract Move error from stderr
+          const error_detail = stderr.trim() || stdout.trim()
           delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
+          console.log('')
+          console.log(chalk.yellow(`  Error details:`))
+          console.log(chalk.dim(`  ${error_detail}`))
+          console.log('')
         }
       } catch (error) {
         delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
+        console.log('')
+        console.log(chalk.yellow(`  Error: ${error.message}`))
+        console.log('')
       }
 
       console.log('')

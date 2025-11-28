@@ -14,6 +14,15 @@ const ORIGINAL_PACKAGE_ID =
   '0x824052b308a7edad4ef16eef0f4f724786577f7fef68b6dddeeba8006ead9eb8'
 
 /**
+ * Shared Versui registry object IDs by network
+ * This is the shared object that maintains the owner->name->site_id mapping
+ */
+const VERSUI_REGISTRY_IDS = {
+  testnet: process.env.VERSUI_OBJECT_ID_TESTNET || null,
+  mainnet: process.env.VERSUI_OBJECT_ID_MAINNET || null,
+}
+
+/**
  * Validates Sui package ID format
  * @param {string} id - Package ID to validate
  * @returns {boolean} True if valid package ID
@@ -74,4 +83,13 @@ export function get_original_package_id(network) {
     return ORIGINAL_PACKAGE_ID
   }
   return null
+}
+
+/**
+ * Get shared Versui registry object ID for network
+ * @param {string} network - Network name (testnet|mainnet)
+ * @returns {string|null} Registry object ID or null if not deployed
+ */
+export function get_versui_registry_id(network) {
+  return VERSUI_REGISTRY_IDS[network]
 }
