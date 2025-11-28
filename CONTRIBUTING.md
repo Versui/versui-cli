@@ -8,10 +8,7 @@ Thank you for considering contributing to Versui! This document outlines the dev
 
 ### Prerequisites
 
-- Node.js 18+
-- Git
-- Sui CLI (`sui`)
-- Walrus CLI (`walrus`)
+Requires: Node.js 18+, sui CLI, walrus CLI
 
 ### Clone and Install
 

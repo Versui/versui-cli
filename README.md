@@ -19,27 +19,42 @@ versui deploy dist
 
 ## Prerequisites
 
-- Node.js 18+
-- [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install) (`sui`)
-- [Walrus CLI](https://docs.walrus.site/walrus-sites/tutorial-install.html) (`walrus`)
-- WAL + SUI tokens (testnet faucet available)
+Requires: Node.js 18+, sui CLI, walrus CLI
 
 ---
 
-## Deploy Your First Site
+## Commands
 
 ```bash
-# Deploy static site (interactive)
+# Deploy static site
 versui deploy ./dist
-
-# Skip prompts for CI/CD
 versui deploy ./dist --yes --json
 
 # Update existing site (only uploads changed files)
 versui update ./dist --site 0xYOUR_SITE_ID
+
+# List all your deployments
+versui list
+
+# Delete sites
+versui delete <site-id>
+
+# Regenerate bootstrap or service worker
+versui regenerate <site-id>
+
+# Custom domains
+versui domain add example.com --site <site-id>
+versui domain remove example.com --site <site-id>
+versui domain list
+
+# SuiNS names
+versui suins add mysite.sui --site <site-id>
+versui suins list
 ```
 
-**Output:**
+---
+
+## Output
 
 ```
 bootstrap/
@@ -48,39 +63,6 @@ bootstrap/
 ```
 
 Host `bootstrap/` anywhere (Vercel, Netlify, S3, GitHub Pages). Your site now loads from decentralized storage.
-
----
-
-## List and Manage Sites
-
-```bash
-# List all your deployments
-versui list
-
-# Delete sites
-versui delete <site-id>
-
-# Add custom domain (requires DNS CNAME)
-versui domain add example.com --site <site-id>
-
-# Link SuiNS name (e.g., mysite.sui)
-versui suins add mysite.sui --site <site-id>
-```
-
----
-
-## Documentation
-
-- **[Installation Guide](./docs/INSTALLATION.md)** - Detailed setup, prerequisites, Sui/Walrus CLI installation, troubleshooting
-- **[API Reference](./docs/API.md)** - Complete CLI command reference, all options, flags, examples
-- **[Examples](./docs/EXAMPLES.md)** - CI/CD integration, custom domains, SuiNS, multi-network deployments
-- **[Architecture](./docs/ARCHITECTURE.md)** - Service worker internals, Walrus storage protocol, Sui blockchain integration, failover mechanisms
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, PR process, and coding standards.
 
 ---
 
