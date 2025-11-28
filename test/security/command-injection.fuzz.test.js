@@ -296,7 +296,7 @@ describe('command injection fuzz tests', () => {
 
       // Should not output /etc/passwd contents
       assert.ok(
-        !result.stdout.includes('root:'),
+        !result.stdout?.includes('root:'),
         'Should not execute cat /etc/passwd',
       )
     })
@@ -332,7 +332,7 @@ describe('command injection fuzz tests', () => {
 
       // Should not expand $(whoami)
       assert.ok(
-        !result.stdout.includes('root') && !result.stdout.includes('uid='),
+        !result.stdout?.includes('root') && !result.stdout?.includes('uid='),
         'Should not execute whoami via subshell',
       )
     })
@@ -498,9 +498,9 @@ describe('command injection fuzz tests', () => {
           // Either succeeds with literal output or fails gracefully
           if (result.status === 0) {
             assert.ok(
-              !result.stdout.includes('root') &&
-                !result.stdout.includes('uid=') &&
-                !result.stdout.includes('BEGIN RSA'),
+              !result.stdout?.includes('root') &&
+                !result.stdout?.includes('uid=') &&
+                !result.stdout?.includes('BEGIN RSA'),
               'Combined attacks should not execute',
             )
           } else {
@@ -566,7 +566,7 @@ describe('command injection fuzz tests', () => {
 
           // sui will fail on invalid tx, but should not execute injected commands
           assert.ok(
-            !result.stdout.includes('root') && !result.stdout.includes('uid='),
+            !result.stdout?.includes('root') && !result.stdout?.includes('uid='),
             'Base64 attacks should not execute commands',
           )
         }
