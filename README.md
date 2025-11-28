@@ -23,7 +23,7 @@ Versui CLI deploys static websites to **Walrus** (decentralized storage with 100
 - **Non-custodial** - Your keys never leave your machine
 - **Service Worker bootstrap** - Generated files for self-hosting
 - **Aggregator failover** - Multiple Walrus aggregators for reliability
-- **Auto-retry on expiry** - Sites automatically recover when renewed
+- **Auto-retry on expiry** - Sites automatically retry when storage is restored
 
 ---
 
@@ -119,6 +119,135 @@ versui delete <site-id> --yes
 
 **Note:** Sites with resources are automatically cleaned up - resources are deleted first, then the site itself.
 
+### Update existing site
+
+Update an existing site with new files (incremental deployment):
+
+```bash
+versui update <directory> --site <site-id>
+```
+
+**Options:**
+
+| Flag               | Description                    | Default   |
+| ------------------ | ------------------------------ | --------- |
+| `--site <id>`      | Site object ID to update       | Required  |
+| `--network <net>`  | Sui network (testnet, mainnet) | `testnet` |
+| `-e, --epochs <n>` | Storage epochs for new files   | `1`       |
+| `--json`           | Output JSON only (for scripts) | `false`   |
+
+**Examples:**
+
+```bash
+# Update site with new files
+versui update ./dist --site 0xYOUR_SITE_ID
+
+# Update on mainnet with extended storage
+versui update ./dist --site 0xYOUR_SITE_ID --network mainnet -e 10
+
+# JSON output for CI/CD
+versui update ./dist --site 0xYOUR_SITE_ID --json
+```
+
+**Note:** Only added/updated/deleted files are uploaded. Unchanged files are reused. You must own the site's AdminCap to update.
+
+### Regenerate bootstrap files
+
+Regenerate bootstrap HTML and service worker for an existing site:
+
+```bash
+versui regenerate <site-id>
+```
+
+**Options:**
+
+| Flag              | Description                    | Default   |
+| ----------------- | ------------------------------ | --------- |
+| `--network <net>` | Sui network (testnet, mainnet) | `testnet` |
+
+**Example:**
+
+```bash
+# Regenerate bootstrap for a site
+versui regenerate 0xYOUR_SITE_ID --network testnet
+```
+
+**Interactive prompt:** Choose between full bootstrap (HTML + SW) or SW snippet only.
+
+### Custom domain management
+
+Link custom domains to your sites:
+
+```bash
+# Add custom domain to a site
+versui domain add <domain> --site <site-id>
+
+# Remove custom domain
+versui domain remove <domain> --site <site-id>
+
+# List all domains across your sites
+versui domain list
+```
+
+**Options:**
+
+| Flag              | Description                    | Default   |
+| ----------------- | ------------------------------ | --------- |
+| `--site <id>`     | Site object ID (optional)      | Prompts   |
+| `--network <net>` | Sui network (testnet, mainnet) | `testnet` |
+
+**Examples:**
+
+```bash
+# Add domain (interactive site selection)
+versui domain add example.com
+
+# Add domain to specific site
+versui domain add example.com --site 0xYOUR_SITE_ID
+
+# List domains
+versui domain list --network testnet
+```
+
+**Note:** After adding a domain, configure DNS CNAME to `versui.app`. DNS propagation may take up to 48 hours.
+
+### SuiNS integration
+
+Link SuiNS names (e.g., `mysite.sui`) to your sites:
+
+```bash
+# Link SuiNS name to a site
+versui suins add <name> --site <site-id>
+
+# List all owned SuiNS names with linked status
+versui suins list
+```
+
+**Options:**
+
+| Flag              | Description                      | Default   |
+| ----------------- | -------------------------------- | --------- |
+| `--site <id>`     | Site object ID (optional)        | Prompts   |
+| `--network <net>` | Sui network (testnet, mainnet)   | `testnet` |
+
+**Examples:**
+
+```bash
+# Link SuiNS name (interactive site selection)
+versui suins add mysite.sui
+
+# Link with @ prefix (equivalent)
+versui suins add @mysite
+
+# Link to specific site
+versui suins add mysite.sui --site 0xYOUR_SITE_ID
+
+# List all owned SuiNS names
+versui suins list
+```
+
+**Note:** You must own the SuiNS name. After linking, access your site at `https://mysite.suins.site`.
+
 ---
 
 ## How It Works
@@ -160,7 +289,7 @@ The SW intercepts requests and fetches from Walrus aggregators:
 - **Multiple aggregators** - Failover if one is down
 - **Exponential backoff** - Retries on failure (5s → 60s cap)
 - **MIME type detection** - Correct Content-Type headers
-- **Auto-recovery** - Sites reload when renewed after expiry
+- **Auto-recovery** - Sites reload when storage is restored after expiry
 
 ---
 
@@ -198,7 +327,7 @@ self.addEventListener('fetch', e => versui.handle(e))
 
 - **Missing walrus CLI** - Shows install instructions
 - **Missing sui CLI** - Shows install instructions
-- **Expired storage** - Bootstrap shows "Awaiting Renewal" with auto-retry
+- **Expired storage** - Bootstrap shows expiry message with auto-retry
 - **No SW support** - Shows browser compatibility message
 
 ---
