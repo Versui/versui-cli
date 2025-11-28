@@ -235,7 +235,6 @@ export async function delete_site(site_identifiers, options = {}) {
             `  ⚠ Skipping ${site_id.slice(0, 10)}... - AdminCap not found (may not own this site)`,
           ),
         )
-        console.log('')
         continue
       }
 
@@ -246,7 +245,6 @@ export async function delete_site(site_identifiers, options = {}) {
             `  ⚠ Skipping ${site_id.slice(0, 10)}... - Invalid AdminCap ID format`,
           ),
         )
-        console.log('')
         continue
       }
 
@@ -262,7 +260,6 @@ export async function delete_site(site_identifiers, options = {}) {
 
       if (!site_obj?.data) {
         site_spinner.fail(`Failed to query Site object`)
-        console.log('')
         continue
       }
 
@@ -271,7 +268,6 @@ export async function delete_site(site_identifiers, options = {}) {
         ?.Shared?.initial_shared_version
       if (!initial_shared_version) {
         site_spinner.fail('Site is not a shared object')
-        console.log('')
         continue
       }
 
@@ -285,7 +281,6 @@ export async function delete_site(site_identifiers, options = {}) {
         console.log(
           chalk.yellow(`  ⚠ Skipping - failed to extract resources Table ID`),
         )
-        console.log('')
         continue
       }
 
@@ -296,6 +291,7 @@ export async function delete_site(site_identifiers, options = {}) {
       let cursor = null
 
       while (has_next_page) {
+        res_spinner.text = `Checking site resources (${all_resources.length} found)...`
         const resources_response = await client.getDynamicFields({
           parentId: resources_table_id,
           cursor,
@@ -333,7 +329,6 @@ export async function delete_site(site_identifiers, options = {}) {
               `  ⚠ Skipping ${invalid_paths.length} invalid resource path(s) (contains shell metacharacters or invalid format)`,
             ),
           )
-          console.log('')
         }
 
         // Delete resources in batches (PTB limit is 1024 commands, use 50 for safety)
@@ -341,6 +336,7 @@ export async function delete_site(site_identifiers, options = {}) {
           const batch_size = 50
           const total_batches = Math.ceil(paths_to_delete.length / batch_size)
           let total_deleted = 0
+          const del_spinner = ora().start()
 
           for (let i = 0; i < total_batches; i++) {
             const batch_start = i * batch_size
@@ -350,9 +346,7 @@ export async function delete_site(site_identifiers, options = {}) {
             )
             const batch = paths_to_delete.slice(batch_start, batch_end)
 
-            const del_spinner = ora(
-              `Deleting batch ${i + 1}/${total_batches} (${batch.length} resource(s))...`,
-            ).start()
+            del_spinner.text = `Deleting batch ${i + 1}/${total_batches}...`
 
             try {
               // Dynamic gas budget: 1M base + 1M per resource (min 50M)
@@ -395,51 +389,37 @@ export async function delete_site(site_identifiers, options = {}) {
                 del_spinner.fail(
                   `Failed to delete batch ${i + 1}/${total_batches}`,
                 )
-                console.log('')
                 console.log(chalk.yellow(`  Error details:`))
                 console.log(chalk.dim(`  ${error_detail}`))
-                console.log('')
                 // Don't set resources_deleted_successfully = true, break early
                 break
               } else {
                 total_deleted += batch.length
-                del_spinner.succeed(
-                  `Deleted batch ${i + 1}/${total_batches} (${batch.length} resource(s), gas: ${gas_budget.toLocaleString()})`,
-                )
 
                 // Only mark as successful if ALL batches completed
                 if (i === total_batches - 1) {
                   resources_deleted_successfully = true
+                  del_spinner.succeed(
+                    `Deleted ${total_deleted} resource(s) in ${total_batches} batch${total_batches > 1 ? 'es' : ''}`,
+                  )
                 }
               }
             } catch (error) {
               del_spinner.fail(
                 `Failed to delete batch ${i + 1}/${total_batches}: ${error.message}`,
               )
-              console.log('')
               // Don't set resources_deleted_successfully = true, break early
               break
             }
           }
 
-          // Report final status
-          if (
-            resources_deleted_successfully &&
-            total_deleted === paths_to_delete.length
-          ) {
-            console.log(
-              chalk.green(
-                `  ✓ Successfully deleted all ${total_deleted} resource(s)`,
-              ),
-            )
-            console.log('')
-          } else if (total_deleted > 0) {
+          // Report final status if partial failure
+          if (!resources_deleted_successfully && total_deleted > 0) {
             console.log(
               chalk.yellow(
                 `  ⚠ Partially deleted ${total_deleted}/${paths_to_delete.length} resource(s)`,
               ),
             )
-            console.log('')
           }
         } else {
           // No resources to delete, mark as successful
@@ -457,7 +437,6 @@ export async function delete_site(site_identifiers, options = {}) {
             `  ⚠ Skipping site deletion - resources were not fully deleted`,
           ),
         )
-        console.log('')
         continue
       }
 
@@ -501,19 +480,13 @@ export async function delete_site(site_identifiers, options = {}) {
           // Extract Move error from stderr
           const error_detail = stderr.trim() || stdout.trim()
           delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
-          console.log('')
           console.log(chalk.yellow(`  Error details:`))
           console.log(chalk.dim(`  ${error_detail}`))
-          console.log('')
         }
       } catch (error) {
         delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
-        console.log('')
         console.log(chalk.yellow(`  Error: ${error.message}`))
-        console.log('')
       }
-
-      console.log('')
     }
 
     // Summary
