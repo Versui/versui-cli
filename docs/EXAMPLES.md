@@ -34,15 +34,7 @@ jobs:
       - name: Build site
         run: npm run build
 
-      - name: Install Sui CLI
-        run: |
-          cargo install --locked --git https://github.com/MystenLabs/sui.git --branch mainnet sui
-
-      - name: Install Walrus CLI
-        run: |
-          curl -LO https://storage.googleapis.com/mysten-walrus-binaries/walrus-latest-ubuntu-x86_64
-          chmod +x walrus-latest-ubuntu-x86_64
-          sudo mv walrus-latest-ubuntu-x86_64 /usr/local/bin/walrus
+      # Ensure sui and walrus CLIs are installed
 
       - name: Configure Sui Wallet
         run: |
@@ -88,16 +80,7 @@ deploy:
   dependencies:
     - build
   before_script:
-    # Install Sui CLI
-    - apt-get update && apt-get install -y curl build-essential
-    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    - source $HOME/.cargo/env
-    - cargo install --locked --git https://github.com/MystenLabs/sui.git --branch mainnet sui
-
-    # Install Walrus CLI
-    - curl -LO https://storage.googleapis.com/mysten-walrus-binaries/walrus-latest-ubuntu-x86_64
-    - chmod +x walrus-latest-ubuntu-x86_64
-    - mv walrus-latest-ubuntu-x86_64 /usr/local/bin/walrus
+    # Ensure sui and walrus CLIs are installed
 
     # Configure Sui wallet
     - mkdir -p ~/.sui/sui_config
