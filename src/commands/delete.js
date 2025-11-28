@@ -17,12 +17,11 @@ function is_valid_sui_object_id(id) {
 }
 
 /**
- * Validate resource path (must start with /, no shell metacharacters)
+ * Validate resource path (optional leading /, no shell metacharacters)
  * @param {string} path - Resource path to validate
  * @returns {boolean} True if valid
  */
 function is_valid_resource_path(path) {
-  if (!path.startsWith('/')) return false
   // Block shell metacharacters: ; | & $ ` \ " ' < > ( ) [ ] { } * ? ! ~
   if (/[;|&$`\\"'<>()[\]{}*?!~]/.test(path)) return false
   return true

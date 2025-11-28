@@ -53,6 +53,8 @@ const state = {
   network: null,
   epochs: null,
   wallet: null,
+  sui_balance: null,
+  wal_balance: null,
   files_count: 0,
   total_size: 0,
   walrus_cost: null,
@@ -106,6 +108,21 @@ function render_state(include_header = false) {
       config_items.push(
         `${chalk.dim('Wallet:')} ${chalk.dim(format_wallet_address(state.wallet))}`,
       )
+
+    // Add balance info if available
+    if (state.sui_balance !== null || state.wal_balance !== null) {
+      const balance_parts = []
+      if (state.sui_balance !== null) {
+        balance_parts.push(`SUI: ${state.sui_balance.toFixed(2)}`)
+      }
+      if (state.wal_balance !== null) {
+        balance_parts.push(`WAL: ${state.wal_balance.toFixed(2)}`)
+      }
+      config_items.push(
+        `${chalk.dim('Balances:')} ${chalk.green(balance_parts.join(' │ '))}`,
+      )
+    }
+
     lines.push('  ' + config_items.join('  │  '))
     lines.push('')
   }
@@ -264,6 +281,50 @@ async function get_sui_gas_estimate(tx_bytes, sui_client) {
     }
   } catch {}
   return null
+}
+
+// WAL coin type addresses by network
+const WAL_COIN_TYPES = {
+  testnet: '0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL',
+  mainnet: '0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL',
+}
+
+/**
+ * Fetch wallet balances (SUI and WAL)
+ * @param {string} wallet - Wallet address
+ * @param {string} network - Network (testnet|mainnet)
+ * @param {Object} sui_client - Sui client
+ * @returns {Promise<{sui: number|null, wal: number|null}>}
+ */
+async function get_wallet_balances(wallet, network, sui_client) {
+  const balances = { sui: null, wal: null }
+
+  try {
+    // Get SUI balance
+    const sui_balance = await sui_client.getBalance({
+      owner: wallet,
+      coinType: '0x2::sui::SUI',
+    })
+    balances.sui = Number(sui_balance.totalBalance) / 1_000_000_000
+  } catch {
+    // Ignore errors, balance stays null
+  }
+
+  try {
+    // Get WAL balance using hardcoded coin type
+    const wal_coin_type = WAL_COIN_TYPES[network]
+    if (wal_coin_type) {
+      const wal_balance = await sui_client.getBalance({
+        owner: wallet,
+        coinType: wal_coin_type,
+      })
+      balances.wal = Number(wal_balance.totalBalance) / 1_000_000_000
+    }
+  } catch {
+    // Ignore errors, balance stays null
+  }
+
+  return balances
 }
 
 async function confirm_action(
@@ -476,6 +537,21 @@ export async function deploy(dir, options = {}) {
         'No active Sui wallet. Run: sui client new-address ed25519',
       )
 
+    // Initialize SuiClient early to fetch balances
+    const rpc_url = getFullnodeUrl(
+      network === 'mainnet' ? 'mainnet' : 'testnet',
+    )
+    const sui_client = new SuiClient({ url: rpc_url })
+
+    // Fetch wallet balances
+    const { sui, wal } = await get_wallet_balances(
+      state.wallet,
+      network,
+      sui_client,
+    )
+    state.sui_balance = sui
+    state.wal_balance = wal
+
     // Clear screen and show progress tracker
     console.clear()
     console.log('')
@@ -549,11 +625,6 @@ export async function deploy(dir, options = {}) {
     state.step = 'sui'
     state.spinner_text = 'Building create site transaction...'
     update_display()
-
-    const rpc_url = getFullnodeUrl(
-      network === 'mainnet' ? 'mainnet' : 'testnet',
-    )
-    const sui_client = new SuiClient({ url: rpc_url })
 
     const package_id = VERSUI_PACKAGE_IDS[network]
     if (!package_id) {
@@ -1222,6 +1293,7 @@ async function upload_to_walrus_with_progress(
 export {
   get_sui_active_address,
   get_walrus_price_estimate,
+  get_wallet_balances,
   upload_to_walrus_with_progress,
   generate_bootstrap,
 }
