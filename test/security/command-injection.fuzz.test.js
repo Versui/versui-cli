@@ -57,13 +57,13 @@ describe('command injection fuzz tests', () => {
 
   describe('environment variable injection', () => {
     const env_payloads = [
-      { name: 'HOME expansion', payload: 'AAA$HOME' },
-      { name: 'PATH expansion', payload: 'AAA$PATH' },
-      { name: 'USER expansion', payload: 'AAA${USER}' },
-      { name: 'shell expansion', payload: 'AAA${SHELL}' },
-      { name: 'nested expansion', payload: 'AAA${HOME}${PATH}' },
-      { name: 'default value', payload: 'AAA${VAR:-default}' },
-      { name: 'substring extraction', payload: 'AAA${HOME:0:5}' },
+      { name: 'HOME expansion', payload: `AAA$HOME` },
+      { name: 'PATH expansion', payload: `AAA$PATH` },
+      { name: 'USER expansion', payload: `AAA\${USER}` },
+      { name: 'shell expansion', payload: `AAA\${SHELL}` },
+      { name: 'nested expansion', payload: `AAA\${HOME}\${PATH}` },
+      { name: 'default value', payload: `AAA\${VAR:-default}` },
+      { name: 'substring extraction', payload: `AAA\${HOME:0:5}` },
     ]
 
     for (const { name, payload } of env_payloads) {
@@ -216,7 +216,11 @@ describe('command injection fuzz tests', () => {
         has_null: false,
       },
       { name: 'DEL character', payload: 'AAA\x7F;whoami', has_null: false },
-      { name: 'high ASCII', payload: 'AAA\x80\x81\x82;whoami', has_null: false },
+      {
+        name: 'high ASCII',
+        payload: 'AAA\x80\x81\x82;whoami',
+        has_null: false,
+      },
       {
         name: 'mixed binary with null',
         payload: Buffer.from([
@@ -246,7 +250,10 @@ describe('command injection fuzz tests', () => {
           })
 
           assert.strictEqual(result.status, 0, 'echo should succeed')
-          assert.ok(!result.stdout.includes('root'), 'Should not execute whoami')
+          assert.ok(
+            !result.stdout.includes('root'),
+            'Should not execute whoami',
+          )
           assert.ok(!result.stdout.includes('uid='), 'Should not execute id')
         }
       })
@@ -334,14 +341,10 @@ describe('command injection fuzz tests', () => {
       const safe_tx = 'dGVzdA=='
       const malicious_flag = '--json;rm -rf /'
 
-      const result = spawnSync(
-        'sui',
-        ['client', 'serialized-tx', safe_tx, malicious_flag],
-        {
-          encoding: 'utf8',
-          stdio: ['pipe', 'pipe', 'pipe'],
-        },
-      )
+      spawnSync('sui', ['client', 'serialized-tx', safe_tx, malicious_flag], {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
 
       // sui will treat malicious_flag as invalid option, not execute injection
       assert.ok(true, 'Array args prevent flag injection')
@@ -350,16 +353,36 @@ describe('command injection fuzz tests', () => {
 
   describe('path traversal in tx_base64', () => {
     const path_payloads = [
-      { name: 'parent directory', payload: '../../../etc/passwd', has_null: false },
+      {
+        name: 'parent directory',
+        payload: '../../../etc/passwd',
+        has_null: false,
+      },
       { name: 'absolute path', payload: '/etc/passwd', has_null: false },
-      { name: 'windows path', payload: 'C:\\Windows\\System32\\cmd.exe', has_null: false },
+      {
+        name: 'windows path',
+        payload: 'C:\\Windows\\System32\\cmd.exe',
+        has_null: false,
+      },
       { name: 'UNC path', payload: '\\\\server\\share\\file', has_null: false },
-      { name: 'encoded traversal', payload: '..%2F..%2F..%2Fetc%2Fpasswd', has_null: false },
-      { name: 'null byte traversal', payload: '../../../etc/passwd\x00.txt', has_null: true },
+      {
+        name: 'encoded traversal',
+        payload: '..%2F..%2F..%2Fetc%2Fpasswd',
+        has_null: false,
+      },
+      {
+        name: 'null byte traversal',
+        payload: '../../../etc/passwd\x00.txt',
+        has_null: true,
+      },
     ]
 
     for (const { name, payload, has_null } of path_payloads) {
-      it(`isolates ${name}: ${payload.replace(/\x00/g, '\\x00')}`, () => {
+      const display_payload = payload
+        .split('')
+        .map(c => (c.charCodeAt(0) === 0 ? '\\x00' : c))
+        .join('')
+      it(`isolates ${name}: ${display_payload}`, () => {
         if (has_null) {
           assert.throws(
             () => {
@@ -523,14 +546,10 @@ describe('command injection fuzz tests', () => {
           // Null bytes rejected at platform level
           assert.throws(
             () => {
-              spawnSync(
-                'sui',
-                ['client', 'serialized-tx', payload, '--json'],
-                {
-                  encoding: 'utf8',
-                  stdio: ['pipe', 'pipe', 'pipe'],
-                },
-              )
+              spawnSync('sui', ['client', 'serialized-tx', payload, '--json'], {
+                encoding: 'utf8',
+                stdio: ['pipe', 'pipe', 'pipe'],
+              })
             },
             { code: 'ERR_INVALID_ARG_VALUE' },
           )

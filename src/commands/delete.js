@@ -1,5 +1,5 @@
 import { execSync, spawnSync } from 'node:child_process'
-import { resolve, normalize } from 'node:path'
+import { resolve } from 'node:path'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import chalk from 'chalk'

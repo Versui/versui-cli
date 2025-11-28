@@ -1,5 +1,5 @@
 import { test } from 'node:test'
-import { strictEqual, rejects, doesNotThrow, match } from 'node:assert'
+import { strictEqual, rejects, doesNotThrow } from 'node:assert'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'

@@ -1,7 +1,10 @@
 import { describe, it, mock } from 'node:test'
 import assert from 'node:assert'
 
-import { fetch_site_blob_objects, extend_blob } from '../../src/commands/renew.js'
+import {
+  fetch_site_blob_objects,
+  extend_blob,
+} from '../../src/commands/renew.js'
 
 describe('renew command - fetch_site_blob_objects', () => {
   it('should fetch blob object IDs from site', async () => {
@@ -12,37 +15,34 @@ describe('renew command - fetch_site_blob_objects', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => ({
-        data: [
-          { objectId: 'resource-1' },
-          { objectId: 'resource-2' }
-        ],
+        data: [{ objectId: 'resource-1' }, { objectId: 'resource-2' }],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: null,
       })),
       multiGetObjects: mock.fn(async () => [
         {
           data: {
             content: {
-              fields: { blob_object_id: 'blob-1' }
-            }
-          }
+              fields: { blob_object_id: 'blob-1' },
+            },
+          },
         },
         {
           data: {
             content: {
-              fields: { blob_object_id: 'blob-2' }
-            }
-          }
-        }
-      ])
+              fields: { blob_object_id: 'blob-2' },
+            },
+          },
+        },
+      ]),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
@@ -55,12 +55,12 @@ describe('renew command - fetch_site_blob_objects', () => {
 
   it('should throw error if site not found', async () => {
     const mock_client = {
-      getObject: mock.fn(async () => ({ data: null }))
+      getObject: mock.fn(async () => ({ data: null })),
     }
 
     await assert.rejects(
       async () => fetch_site_blob_objects('invalid-site', mock_client),
-      { message: 'Site not found: invalid-site' }
+      { message: 'Site not found: invalid-site' },
     )
   })
 
@@ -72,18 +72,18 @@ describe('renew command - fetch_site_blob_objects', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => ({
         data: [],
         hasNextPage: false,
-        nextCursor: null
-      }))
+        nextCursor: null,
+      })),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
@@ -100,43 +100,43 @@ describe('renew command - fetch_site_blob_objects', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async ({ cursor }) => {
         if (!cursor) {
           return {
             data: [{ objectId: 'resource-1' }],
             hasNextPage: true,
-            nextCursor: 'cursor-1'
+            nextCursor: 'cursor-1',
           }
         }
         return {
           data: [{ objectId: 'resource-2' }],
           hasNextPage: false,
-          nextCursor: null
+          nextCursor: null,
         }
       }),
       multiGetObjects: mock.fn(async () => [
         {
           data: {
             content: {
-              fields: { blob_object_id: 'blob-1' }
-            }
-          }
+              fields: { blob_object_id: 'blob-1' },
+            },
+          },
         },
         {
           data: {
             content: {
-              fields: { blob_object_id: 'blob-2' }
-            }
-          }
-        }
-      ])
+              fields: { blob_object_id: 'blob-2' },
+            },
+          },
+        },
+      ]),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
@@ -153,37 +153,34 @@ describe('renew command - fetch_site_blob_objects', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => ({
-        data: [
-          { objectId: 'resource-1' },
-          { objectId: 'resource-2' }
-        ],
+        data: [{ objectId: 'resource-1' }, { objectId: 'resource-2' }],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: null,
       })),
       multiGetObjects: mock.fn(async () => [
         {
           data: {
             content: {
-              fields: { blob_object_id: 'blob-1' }
-            }
-          }
+              fields: { blob_object_id: 'blob-1' },
+            },
+          },
         },
         {
           data: {
             content: {
-              fields: {} // No blob_object_id
-            }
-          }
-        }
-      ])
+              fields: {}, // No blob_object_id
+            },
+          },
+        },
+      ]),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
@@ -199,31 +196,28 @@ describe('renew command - fetch_site_blob_objects', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => ({
-        data: [
-          { objectId: 'resource-1' },
-          { objectId: 'resource-2' }
-        ],
+        data: [{ objectId: 'resource-1' }, { objectId: 'resource-2' }],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: null,
       })),
       multiGetObjects: mock.fn(async () => [
         {
           data: {
             content: {
-              fields: { blob_object_id: 'blob-1' }
-            }
-          }
+              fields: { blob_object_id: 'blob-1' },
+            },
+          },
         },
-        { data: null } // Missing data
-      ])
+        { data: null }, // Missing data
+      ]),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
@@ -240,28 +234,32 @@ describe('renew command - fetch_site_blob_objects', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => ({
         data: [],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: null,
       })),
       multiGetObjects: mock.fn(async () => {
         multi_get_called = true
         return []
-      })
+      }),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
 
     assert.deepStrictEqual(blob_ids, [])
-    assert.strictEqual(multi_get_called, false, 'multiGetObjects should not be called when no resources')
+    assert.strictEqual(
+      multi_get_called,
+      false,
+      'multiGetObjects should not be called when no resources',
+    )
   })
 
   it('should handle multiple pages of dynamic fields', async () => {
@@ -273,12 +271,12 @@ describe('renew command - fetch_site_blob_objects', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async ({ cursor }) => {
         page_count++
@@ -286,20 +284,20 @@ describe('renew command - fetch_site_blob_objects', () => {
           return {
             data: [{ objectId: 'resource-1' }, { objectId: 'resource-2' }],
             hasNextPage: true,
-            nextCursor: 'cursor-1'
+            nextCursor: 'cursor-1',
           }
         }
         if (cursor === 'cursor-1') {
           return {
             data: [{ objectId: 'resource-3' }, { objectId: 'resource-4' }],
             hasNextPage: true,
-            nextCursor: 'cursor-2'
+            nextCursor: 'cursor-2',
           }
         }
         return {
           data: [{ objectId: 'resource-5' }],
           hasNextPage: false,
-          nextCursor: null
+          nextCursor: null,
         }
       }),
       multiGetObjects: mock.fn(async () => [
@@ -307,14 +305,20 @@ describe('renew command - fetch_site_blob_objects', () => {
         { data: { content: { fields: { blob_object_id: 'blob-2' } } } },
         { data: { content: { fields: { blob_object_id: 'blob-3' } } } },
         { data: { content: { fields: { blob_object_id: 'blob-4' } } } },
-        { data: { content: { fields: { blob_object_id: 'blob-5' } } } }
-      ])
+        { data: { content: { fields: { blob_object_id: 'blob-5' } } } },
+      ]),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
 
     assert.strictEqual(page_count, 3, 'Should have fetched 3 pages')
-    assert.deepStrictEqual(blob_ids, ['blob-1', 'blob-2', 'blob-3', 'blob-4', 'blob-5'])
+    assert.deepStrictEqual(blob_ids, [
+      'blob-1',
+      'blob-2',
+      'blob-3',
+      'blob-4',
+      'blob-5',
+    ])
   })
 
   it('should handle large number of resources', async () => {
@@ -326,34 +330,39 @@ describe('renew command - fetch_site_blob_objects', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => ({
-        data: Array.from({ length: resource_count }, (_, i) => ({ objectId: `resource-${i}` })),
+        data: Array.from({ length: resource_count }, (_, i) => ({
+          objectId: `resource-${i}`,
+        })),
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: null,
       })),
       multiGetObjects: mock.fn(async () =>
         Array.from({ length: resource_count }, (_, i) => ({
           data: {
             content: {
-              fields: { blob_object_id: `blob-${i}` }
-            }
-          }
-        }))
-      )
+              fields: { blob_object_id: `blob-${i}` },
+            },
+          },
+        })),
+      ),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
 
     assert.strictEqual(blob_ids.length, resource_count)
     assert.strictEqual(blob_ids[0], 'blob-0')
-    assert.strictEqual(blob_ids[resource_count - 1], `blob-${resource_count - 1}`)
+    assert.strictEqual(
+      blob_ids[resource_count - 1],
+      `blob-${resource_count - 1}`,
+    )
   })
 })
 
@@ -394,7 +403,7 @@ describe('renew command - extend_blob', () => {
     const test_cases = [
       { blob_id: '0x1', epochs: 1 },
       { blob_id: '0x2', epochs: 5 },
-      { blob_id: '0x3', epochs: 100 }
+      { blob_id: '0x3', epochs: 100 },
     ]
 
     for (const { blob_id, epochs } of test_cases) {
@@ -416,13 +425,7 @@ describe('renew command - extend_blob', () => {
 
 describe('renew command - input validation', () => {
   it('should validate blob object ID format', async () => {
-    const test_ids = [
-      '0x123',
-      '0xabcdef0123456789',
-      'invalid',
-      '',
-      '123456'
-    ]
+    const test_ids = ['0x123', '0xabcdef0123456789', 'invalid', '', '123456']
 
     for (const blob_id of test_ids) {
       const result = await extend_blob(blob_id, 5)
@@ -437,7 +440,7 @@ describe('renew command - input validation', () => {
       { epochs: 1, should_work: true },
       { epochs: 0, should_work: false }, // Walrus likely rejects 0
       { epochs: -1, should_work: false },
-      { epochs: 1000, should_work: true }
+      { epochs: 1000, should_work: true },
     ]
 
     for (const { epochs } of test_cases) {
@@ -451,14 +454,14 @@ describe('renew command - input validation', () => {
 describe('renew command - error handling', () => {
   it('should handle missing site gracefully', async () => {
     const mock_client = {
-      getObject: mock.fn(async () => ({ data: null }))
+      getObject: mock.fn(async () => ({ data: null })),
     }
 
     await assert.rejects(
       async () => fetch_site_blob_objects('0xnonexistent', mock_client),
       {
-        message: /Site not found/
-      }
+        message: /Site not found/,
+      },
     )
   })
 
@@ -467,14 +470,14 @@ describe('renew command - error handling', () => {
       getObject: mock.fn(async () => ({
         data: {
           content: {
-            fields: {} // Missing resources field
-          }
-        }
-      }))
+            fields: {}, // Missing resources field
+          },
+        },
+      })),
     }
 
-    await assert.rejects(
-      async () => fetch_site_blob_objects('site-123', mock_client)
+    await assert.rejects(async () =>
+      fetch_site_blob_objects('site-123', mock_client),
     )
   })
 
@@ -486,21 +489,21 @@ describe('renew command - error handling', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => {
         throw new Error('Network error')
-      })
+      }),
     }
 
     await assert.rejects(
       async () => fetch_site_blob_objects('site-123', mock_client),
-      { message: 'Network error' }
+      { message: 'Network error' },
     )
   })
 
@@ -512,26 +515,26 @@ describe('renew command - error handling', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => ({
         data: [{ objectId: 'resource-1' }],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: null,
       })),
       multiGetObjects: mock.fn(async () => {
         throw new Error('RPC error')
-      })
+      }),
     }
 
     await assert.rejects(
       async () => fetch_site_blob_objects('site-123', mock_client),
-      { message: 'RPC error' }
+      { message: 'RPC error' },
     )
   })
 })
@@ -548,21 +551,21 @@ describe('renew command - data extraction', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: expected_table_id }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: expected_table_id },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async ({ parentId }) => {
         actual_table_id = parentId
         return {
           data: [],
           hasNextPage: false,
-          nextCursor: null
+          nextCursor: null,
         }
-      })
+      }),
     }
 
     await fetch_site_blob_objects('site-123', mock_client)
@@ -580,25 +583,25 @@ describe('renew command - data extraction', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async ({ cursor }) => {
         if (!cursor) {
           return {
             data: [{ objectId: 'r1' }, { objectId: 'r2' }],
             hasNextPage: true,
-            nextCursor: 'c1'
+            nextCursor: 'c1',
           }
         }
         return {
           data: [{ objectId: 'r3' }],
           hasNextPage: false,
-          nextCursor: null
+          nextCursor: null,
         }
       }),
       multiGetObjects: mock.fn(async ({ ids }) => {
@@ -606,11 +609,11 @@ describe('renew command - data extraction', () => {
         return ids.map(id => ({
           data: {
             content: {
-              fields: { blob_object_id: `blob-${id}` }
-            }
-          }
+              fields: { blob_object_id: `blob-${id}` },
+            },
+          },
         }))
-      })
+      }),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)
@@ -627,29 +630,29 @@ describe('renew command - data extraction', () => {
             fields: {
               resources: {
                 fields: {
-                  id: { id: 'table-123' }
-                }
-              }
-            }
-          }
-        }
+                  id: { id: 'table-123' },
+                },
+              },
+            },
+          },
+        },
       })),
       getDynamicFields: mock.fn(async () => ({
         data: [
           { objectId: 'r1' },
           { objectId: 'r2' },
           { objectId: 'r3' },
-          { objectId: 'r4' }
+          { objectId: 'r4' },
         ],
         hasNextPage: false,
-        nextCursor: null
+        nextCursor: null,
       })),
       multiGetObjects: mock.fn(async () => [
         { data: { content: { fields: { blob_object_id: 'blob-1' } } } },
         { data: { content: { fields: { blob_object_id: null } } } },
         { data: { content: { fields: { blob_object_id: undefined } } } },
-        { data: { content: { fields: { blob_object_id: 'blob-4' } } } }
-      ])
+        { data: { content: { fields: { blob_object_id: 'blob-4' } } } },
+      ]),
     }
 
     const blob_ids = await fetch_site_blob_objects('site-123', mock_client)

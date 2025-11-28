@@ -4,7 +4,7 @@ import { join, relative } from 'node:path'
 
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import { Transaction } from '@mysten/sui/transactions'
-import { fromBase64, toBase64 } from '@mysten/sui/utils'
+import { toBase64 } from '@mysten/sui/utils'
 import chalk from 'chalk'
 import gradient from 'gradient-string'
 import figlet from 'figlet'

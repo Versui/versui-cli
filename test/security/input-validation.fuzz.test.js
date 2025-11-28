@@ -1,5 +1,6 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
+
 import { generate_bootstrap } from '../../src/lib/generate.js'
 
 /**
@@ -59,7 +60,7 @@ describe('blob_id XSS/injection fuzz tests', () => {
 
     // SQL/NoSQL injection patterns
     "'; DROP TABLE sites; --",
-    '1\' OR \'1\'=\'1',
+    "1' OR '1'='1",
     '{ "$gt": "" }',
     '{ "$ne": null }',
     '{"$where": "sleep(1000)"}',
@@ -96,7 +97,7 @@ describe('blob_id XSS/injection fuzz tests', () => {
     '\'"',
   ]
 
-  xss_vectors.forEach((malicious_input) => {
+  xss_vectors.forEach(malicious_input => {
     const display_input =
       malicious_input.length > 50
         ? `${malicious_input.slice(0, 50)}... (${malicious_input.length} chars)`
@@ -143,13 +144,11 @@ describe('blob_id XSS/injection fuzz tests', () => {
         'Service worker should contain blob_id validation regex',
       )
 
-      // Verify the regex would reject this malicious input
-      const blob_id_regex = /^[a-zA-Z0-9_-]+$/
-      const is_valid = blob_id_regex.test(malicious_input)
-
       // All inputs (valid or not) - confirm the SW has protection code
       assert.ok(
-        sw.includes("if(!/^[a-zA-Z0-9_-]+$/.test(b))return e.respondWith(new Response('invalid',{status:400}))"),
+        sw.includes(
+          "if(!/^[a-zA-Z0-9_-]+$/.test(b))return e.respondWith(new Response('invalid',{status:400}))",
+        ),
         'Service worker should have runtime validation that returns 400 for invalid blob_id',
       )
 
@@ -180,13 +179,16 @@ describe('blob_id XSS/injection fuzz tests', () => {
       '-',
     ]
 
-    valid_blob_ids.forEach((blob_id) => {
+    valid_blob_ids.forEach(blob_id => {
       const resource_map = { '/index.html': blob_id }
       const { sw } = generate_bootstrap('test', aggregators, resource_map)
 
       const blob_id_regex = /^[a-zA-Z0-9_-]+$/
       assert.ok(blob_id_regex.test(blob_id), `${blob_id} should be valid`)
-      assert.ok(sw.includes(blob_id), `Valid blob_id ${blob_id} should be in SW`)
+      assert.ok(
+        sw.includes(blob_id),
+        `Valid blob_id ${blob_id} should be in SW`,
+      )
     })
   })
 })
@@ -196,7 +198,7 @@ describe('package_id validation fuzz tests', () => {
    * Tests package ID validation regex locally
    * Mirrors the validation logic from env.js: /^0x[a-fA-F0-9]{64}$/
    */
-  const is_valid_package_id = (id) => {
+  const is_valid_package_id = id => {
     if (!id || typeof id !== 'string') return false
     return /^0x[a-fA-F0-9]{64}$/.test(id)
   }
@@ -256,10 +258,7 @@ describe('package_id validation fuzz tests', () => {
     },
     {
       input:
-        '0x' +
-        'a'.repeat(32) +
-        '<script>alert(1)</script>' +
-        'a'.repeat(7),
+        '0x' + 'a'.repeat(32) + '<script>alert(1)</script>' + 'a'.repeat(7),
       valid: false,
       label: 'XSS in package ID',
     },
@@ -370,7 +369,7 @@ describe('get_validated_package_id edge cases', () => {
   /**
    * Mirrors the get_validated_package_id logic from env.js
    */
-  const is_valid_package_id = (id) => {
+  const is_valid_package_id = id => {
     if (!id || typeof id !== 'string') return false
     return /^0x[a-fA-F0-9]{64}$/.test(id)
   }
@@ -405,7 +404,10 @@ describe('get_validated_package_id edge cases', () => {
     const default_id =
       '0x2489609d5e6b754634d4ca892ab259222482f31596a13530fcc8110b5b2461cb'
 
-    assert.strictEqual(get_validated_package_id(valid_env, default_id), valid_env)
+    assert.strictEqual(
+      get_validated_package_id(valid_env, default_id),
+      valid_env,
+    )
   })
 
   test('returns null default when env_var is invalid', () => {
@@ -427,7 +429,7 @@ describe('get_validated_package_id edge cases', () => {
       'javascript:alert(1)',
     ]
 
-    malicious_inputs.forEach((input) => {
+    malicious_inputs.forEach(input => {
       assert.strictEqual(
         get_validated_package_id(input, default_id),
         default_id,
@@ -455,7 +457,10 @@ describe('resource_map JSON serialization safety', () => {
     )
 
     // Verify resource map is JSON-stringified
-    assert.ok(sw.match(/const A=.+,R=/), 'Resource map should be in service worker')
+    assert.ok(
+      sw.match(/const A=.+,R=/),
+      'Resource map should be in service worker',
+    )
 
     // JSON.stringify will serialize the object safely
     // Even if malicious keys exist, they'll be quoted strings in the object
@@ -496,19 +501,34 @@ describe('resource_map JSON serialization safety', () => {
       '/app.js': '../../../etc/passwd',
     }
 
-    const { sw } = generate_bootstrap('test', aggregators, malicious_resource_map)
+    const { sw } = generate_bootstrap(
+      'test',
+      aggregators,
+      malicious_resource_map,
+    )
 
     // The malicious blob_ids will be in the resource map JSON
     // BUT the runtime validation regex will block them from being fetched
     assert.ok(
-      sw.includes("if(!/^[a-zA-Z0-9_-]+$/.test(b))return e.respondWith(new Response('invalid',{status:400}))"),
+      sw.includes(
+        "if(!/^[a-zA-Z0-9_-]+$/.test(b))return e.respondWith(new Response('invalid',{status:400}))",
+      ),
       'Runtime validation should catch invalid blob_ids',
     )
 
     // Verify malicious blob_ids fail the regex check
     const blob_id_regex = /^[a-zA-Z0-9_-]+$/
-    assert.ok(!blob_id_regex.test('<script>alert(1)</script>'), 'Script should fail validation')
-    assert.ok(!blob_id_regex.test('javascript:void(0)'), 'JavaScript protocol should fail')
-    assert.ok(!blob_id_regex.test('../../../etc/passwd'), 'Path traversal should fail')
+    assert.ok(
+      !blob_id_regex.test('<script>alert(1)</script>'),
+      'Script should fail validation',
+    )
+    assert.ok(
+      !blob_id_regex.test('javascript:void(0)'),
+      'JavaScript protocol should fail',
+    )
+    assert.ok(
+      !blob_id_regex.test('../../../etc/passwd'),
+      'Path traversal should fail',
+    )
   })
 })

@@ -5,7 +5,6 @@ import chalk from 'chalk'
 import ora from 'ora'
 import prompts from 'prompts'
 
-
 /**
  * Get active wallet address from Sui CLI
  * @returns {string|null} Wallet address or null
@@ -151,7 +150,9 @@ export async function renew(site_id, options = {}) {
     } else {
       console.log('')
       console.log(
-        chalk.yellow('  No blob objects found. Site has no resources to renew.'),
+        chalk.yellow(
+          '  No blob objects found. Site has no resources to renew.',
+        ),
       )
       console.log('')
     }
@@ -183,7 +184,7 @@ export async function renew(site_id, options = {}) {
       process.exit(0)
     }
 
-    epochs = response.epochs
+    ;({ epochs } = response)
   }
 
   // Default to 5 epochs if still not set

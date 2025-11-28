@@ -215,10 +215,14 @@ export async function suins_add(name, options = {}) {
     const tx_bytes = await result.transaction.build({ client: sui_client })
     const tx_base64 = toBase64(tx_bytes)
 
-    const spawn_result = spawnSync('sui', ['client', 'serialized-tx', tx_base64, '--json'], {
-      encoding: 'utf8',
-      stdio: ['inherit', 'pipe', 'pipe'],
-    })
+    const spawn_result = spawnSync(
+      'sui',
+      ['client', 'serialized-tx', tx_base64, '--json'],
+      {
+        encoding: 'utf8',
+        stdio: ['inherit', 'pipe', 'pipe'],
+      },
+    )
 
     if (spawn_result.error) {
       throw spawn_result.error

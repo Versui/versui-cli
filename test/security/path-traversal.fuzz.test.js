@@ -10,7 +10,10 @@ describe('Path Traversal Fuzz Tests', () => {
 
   describe('sanitize_ignore_pattern - Basic Path Traversal', () => {
     test('rejects classic unix path traversal', () => {
-      strictEqual(sanitize_ignore_pattern('../../../etc/passwd', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('../../../etc/passwd', project_dir),
+        null,
+      )
     })
 
     test('rejects relative parent directory', () => {
@@ -26,7 +29,10 @@ describe('Path Traversal Fuzz Tests', () => {
     })
 
     test('accepts valid relative paths', () => {
-      strictEqual(sanitize_ignore_pattern('node_modules', project_dir), 'node_modules')
+      strictEqual(
+        sanitize_ignore_pattern('node_modules', project_dir),
+        'node_modules',
+      )
     })
 
     test('accepts valid subdirectory paths', () => {
@@ -36,11 +42,17 @@ describe('Path Traversal Fuzz Tests', () => {
 
   describe('sanitize_ignore_pattern - URL Encoding Attacks', () => {
     test('rejects URL encoded path traversal (%2e%2e%2f)', () => {
-      strictEqual(sanitize_ignore_pattern('..%2f..%2f..%2fetc/passwd', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('..%2f..%2f..%2fetc/passwd', project_dir),
+        null,
+      )
     })
 
     test('rejects partial URL encoding', () => {
-      strictEqual(sanitize_ignore_pattern('..%2f../etc/passwd', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('..%2f../etc/passwd', project_dir),
+        null,
+      )
     })
 
     test('rejects double URL encoding (%252e)', () => {
@@ -54,15 +66,24 @@ describe('Path Traversal Fuzz Tests', () => {
 
   describe('sanitize_ignore_pattern - Obfuscated Separators', () => {
     test('rejects extra dots with slashes (....//)', () => {
-      strictEqual(sanitize_ignore_pattern('....//....//etc/passwd', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('....//....//etc/passwd', project_dir),
+        null,
+      )
     })
 
     test('rejects backslash separators on unix', () => {
-      strictEqual(sanitize_ignore_pattern('..\\..\\..\\etc\\passwd', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('..\\..\\..\\etc\\passwd', project_dir),
+        null,
+      )
     })
 
     test('rejects mixed forward/backslash', () => {
-      strictEqual(sanitize_ignore_pattern('foo\\../bar/../etc', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('foo\\../bar/../etc', project_dir),
+        null,
+      )
     })
 
     test('rejects double slashes with parent', () => {
@@ -80,36 +101,57 @@ describe('Path Traversal Fuzz Tests', () => {
     })
 
     test('rejects absolute windows path (C:)', () => {
-      strictEqual(sanitize_ignore_pattern('C:\\Windows\\System32', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('C:\\Windows\\System32', project_dir),
+        null,
+      )
     })
 
     test('rejects windows UNC path', () => {
-      strictEqual(sanitize_ignore_pattern('\\\\share\\folder', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('\\\\share\\folder', project_dir),
+        null,
+      )
     })
 
     test('rejects absolute path with traversal', () => {
-      strictEqual(sanitize_ignore_pattern('/home/../etc/passwd', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('/home/../etc/passwd', project_dir),
+        null,
+      )
     })
   })
 
   describe('sanitize_ignore_pattern - Null Byte Injection', () => {
     test('rejects null byte in middle of path', () => {
-      strictEqual(sanitize_ignore_pattern('foo\x00/../etc/passwd', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('foo\x00/../etc/passwd', project_dir),
+        null,
+      )
     })
 
     test('rejects null byte at end', () => {
-      strictEqual(sanitize_ignore_pattern('../etc/passwd\x00.txt', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('../etc/passwd\x00.txt', project_dir),
+        null,
+      )
     })
 
     test('rejects multiple null bytes', () => {
-      strictEqual(sanitize_ignore_pattern('foo\x00\x00/../etc', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('foo\x00\x00/../etc', project_dir),
+        null,
+      )
     })
   })
 
   describe('sanitize_ignore_pattern - Unicode and Encoding Tricks', () => {
     test('rejects unicode homoglyphs for dots', () => {
       // U+2024 (one dot leader) instead of period
-      strictEqual(sanitize_ignore_pattern('\u2024\u2024/etc', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('\u2024\u2024/etc', project_dir),
+        null,
+      )
     })
 
     test('rejects overlong UTF-8 sequences', () => {
@@ -146,11 +188,20 @@ describe('Path Traversal Fuzz Tests', () => {
     })
 
     test('rejects hidden traversal in subpath', () => {
-      strictEqual(sanitize_ignore_pattern('normal/path/../../../../../../etc', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern(
+          'normal/path/../../../../../../etc',
+          project_dir,
+        ),
+        null,
+      )
     })
 
     test('rejects alternating valid and invalid segments', () => {
-      strictEqual(sanitize_ignore_pattern('foo/../bar/../../etc', project_dir), null)
+      strictEqual(
+        sanitize_ignore_pattern('foo/../bar/../../etc', project_dir),
+        null,
+      )
     })
   })
 

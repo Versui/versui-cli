@@ -1,6 +1,7 @@
 import { describe, it, mock } from 'node:test'
 import assert from 'node:assert'
 import { EventEmitter } from 'node:events'
+
 import {
   get_sui_active_address,
   get_walrus_price_estimate,
@@ -93,11 +94,7 @@ describe('get_wallet_balances', () => {
       }),
     }
 
-    const balances = await get_wallet_balances(
-      '0x123',
-      'testnet',
-      mock_client,
-    )
+    const balances = await get_wallet_balances('0x123', 'testnet', mock_client)
     assert.deepStrictEqual(balances, { sui: null, wal: null })
   })
 
@@ -111,11 +108,7 @@ describe('get_wallet_balances', () => {
       }),
     }
 
-    const balances = await get_wallet_balances(
-      '0x123',
-      'testnet',
-      mock_client,
-    )
+    const balances = await get_wallet_balances('0x123', 'testnet', mock_client)
     assert.strictEqual(balances.sui, 1)
     assert.strictEqual(balances.wal, null)
   })
@@ -136,11 +129,7 @@ describe('get_wallet_balances', () => {
       }),
     }
 
-    const balances = await get_wallet_balances(
-      '0x123',
-      'testnet',
-      mock_client,
-    )
+    const balances = await get_wallet_balances('0x123', 'testnet', mock_client)
     assert.strictEqual(balances.sui, 1)
     assert.strictEqual(balances.wal, 5)
   })
@@ -161,11 +150,7 @@ describe('get_wallet_balances', () => {
       }),
     }
 
-    const balances = await get_wallet_balances(
-      '0x123',
-      'mainnet',
-      mock_client,
-    )
+    const balances = await get_wallet_balances('0x123', 'mainnet', mock_client)
     assert.strictEqual(balances.sui, 2)
     assert.strictEqual(balances.wal, 10)
   })
@@ -180,11 +165,7 @@ describe('get_wallet_balances', () => {
       }),
     }
 
-    const balances = await get_wallet_balances(
-      '0x123',
-      'testnet',
-      mock_client,
-    )
+    const balances = await get_wallet_balances('0x123', 'testnet', mock_client)
     assert.strictEqual(balances.sui, 3)
     assert.strictEqual(balances.wal, null)
   })
@@ -199,11 +180,7 @@ describe('get_wallet_balances', () => {
       }),
     }
 
-    const balances = await get_wallet_balances(
-      '0x123',
-      'testnet',
-      mock_client,
-    )
+    const balances = await get_wallet_balances('0x123', 'testnet', mock_client)
     assert.strictEqual(balances.sui, 0.123456789)
   })
 
@@ -214,11 +191,7 @@ describe('get_wallet_balances', () => {
       }),
     }
 
-    const balances = await get_wallet_balances(
-      '0x123',
-      'testnet',
-      mock_client,
-    )
+    const balances = await get_wallet_balances('0x123', 'testnet', mock_client)
     assert.strictEqual(balances.sui, 0)
     assert.strictEqual(balances.wal, 0)
   })
@@ -386,7 +359,11 @@ describe('upload_to_walrus_with_progress', () => {
     )
 
     assert.ok(progress_calls.length > 0)
-    assert.ok(progress_calls.some(c => c.progress === 25 && c.message === 'Encoding...'))
+    assert.ok(
+      progress_calls.some(
+        c => c.progress === 25 && c.message === 'Encoding...',
+      ),
+    )
   })
 
   it('calls progress callback with storing stage', async () => {
@@ -417,7 +394,9 @@ describe('upload_to_walrus_with_progress', () => {
       mock_scan,
     )
 
-    assert.ok(progress_calls.some(c => c.progress === 50 && c.message === 'Storing...'))
+    assert.ok(
+      progress_calls.some(c => c.progress === 50 && c.message === 'Storing...'),
+    )
   })
 
   it('calls progress callback with verifying stage', async () => {
@@ -448,7 +427,11 @@ describe('upload_to_walrus_with_progress', () => {
       mock_scan,
     )
 
-    assert.ok(progress_calls.some(c => c.progress === 75 && c.message === 'Verifying...'))
+    assert.ok(
+      progress_calls.some(
+        c => c.progress === 75 && c.message === 'Verifying...',
+      ),
+    )
   })
 
   it('calls progress callback with finalizing stage', async () => {
@@ -479,7 +462,11 @@ describe('upload_to_walrus_with_progress', () => {
       mock_scan,
     )
 
-    assert.ok(progress_calls.some(c => c.progress === 90 && c.message === 'Finalizing...'))
+    assert.ok(
+      progress_calls.some(
+        c => c.progress === 90 && c.message === 'Finalizing...',
+      ),
+    )
   })
 
   it('calls progress callback with 100% on completion', async () => {

@@ -56,7 +56,10 @@ export function sanitize_ignore_pattern(pattern, project_dir) {
   const normalized_project = resolve(project_dir)
 
   // If resolved path escapes project directory, reject
-  if (!resolved.startsWith(normalized_project + '/') && resolved !== normalized_project) {
+  if (
+    !resolved.startsWith(normalized_project + '/') &&
+    resolved !== normalized_project
+  ) {
     return null
   }
 

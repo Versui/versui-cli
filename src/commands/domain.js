@@ -170,10 +170,14 @@ async function execute_transaction(tx, client) {
   const tx_bytes = await tx.build({ client })
   const tx_base64 = toBase64(tx_bytes)
 
-  const result = spawnSync('sui', ['client', 'serialized-tx', tx_base64, '--json'], {
-    encoding: 'utf8',
-    stdio: ['inherit', 'pipe', 'pipe'],
-  })
+  const result = spawnSync(
+    'sui',
+    ['client', 'serialized-tx', tx_base64, '--json'],
+    {
+      encoding: 'utf8',
+      stdio: ['inherit', 'pipe', 'pipe'],
+    },
+  )
 
   if (result.error) {
     throw result.error
