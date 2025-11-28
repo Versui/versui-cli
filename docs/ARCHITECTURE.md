@@ -93,16 +93,19 @@ src/
 ### 1. File Scanner (`src/lib/files.js`)
 
 **Responsibilities:**
+
 - Recursively traverse static site directory
 - Detect MIME types (using `mime` library)
 - Respect `.versuignore` or `.gitignore` patterns
 
 **Key function:**
+
 ```javascript
 scan_directory(dir, base_dir, ignore_patterns)
 ```
 
 **Ignore patterns:**
+
 - `.versuignore` takes precedence (if exists, `.gitignore` is ignored)
 - Falls back to `.gitignore` if `.versuignore` doesn't exist
 - Path traversal (`../`) rejected for security
@@ -115,6 +118,7 @@ scan_directory(dir, base_dir, ignore_patterns)
 Uses `@mysten/walrus` SDK (NOT subprocess/CLI).
 
 **Key functions:**
+
 - `create_walrus_client(network, sui_client)` - Initialize client
 - `encode_files(walrus_client, files)` - Encode and get blob IDs
 - `upload_files_to_nodes(walrus_client, files, blob_object_ids)` - Upload to storage nodes
@@ -123,16 +127,17 @@ Uses `@mysten/walrus` SDK (NOT subprocess/CLI).
 **Storage epochs:**
 | Network | epoch_duration_days | max_epochs |
 |---------|---------------------|------------|
-| mainnet | 14                  | 53         |
-| testnet | 1                   | 53         |
+| mainnet | 14 | 53 |
+| testnet | 1 | 53 |
 
-*Source: `src/commands/deploy/walrus-info.js` (fallback values)*
+_Source: `src/commands/deploy/walrus-info.js` (fallback values)_
 
 ---
 
 ### 3. Sui Blockchain Integration (`src/lib/sui.js`)
 
 **Transaction flow:**
+
 1. Encode files with Walrus SDK (get blob IDs)
 2. Create/update Site object on Sui blockchain
 3. Upload encoded blobs to Walrus storage nodes
@@ -145,10 +150,12 @@ Ownership token issued on site creation, required for updates.
 ### 4. Bootstrap Generator
 
 **Files generated:**
+
 - `bootstrap/index.html` - Service worker registration page
 - `bootstrap/sw.js` - Service worker that fetches from Walrus
 
 **Service Worker:**
+
 - Intercepts fetch requests
 - Maps URL paths to Walrus blob IDs
 - Fetches from Walrus aggregators with failover
@@ -209,11 +216,13 @@ versui update ./dist
 ## Configuration
 
 **`.versui` file (JSON):**
+
 - `name` - Site name
 - `aggregators` - Custom Walrus aggregator URLs
 - Other site-specific settings
 
 **`.versuignore` file:**
+
 - Glob patterns of files to exclude from deployment
 - Same format as `.gitignore`
 - Takes precedence over `.gitignore`
@@ -223,11 +232,13 @@ versui update ./dist
 ## Security
 
 **Key management:**
+
 - Private keys stored in `~/.sui/sui_config/sui.keystore`
 - Never transmitted over network
 - Used locally to sign transactions
 
 **Ownership verification:**
+
 - AdminCap token required for site updates
 - AdminCap references Site object ID
 - Only AdminCap holder can modify site
@@ -237,8 +248,10 @@ versui update ./dist
 ## Limitations
 
 **File size:**
+
 - Walrus max blob size varies by network configuration
 - CLI automatically handles chunking if needed
 
 **Browser compatibility:**
+
 - Service Worker required (Chrome 40+, Firefox 44+, Safari 11.1+, Edge 17+)

@@ -67,12 +67,12 @@ Update existing site with new/changed files (delta deployment).
 
 ### Options
 
-| Flag               | Description                  | Default  |
-| ------------------ | ---------------------------- | -------- |
-| `--site <id>`      | Site object ID to update     | Required |
+| Flag               | Description                  | Default              |
+| ------------------ | ---------------------------- | -------------------- |
+| `--site <id>`      | Site object ID to update     | Required             |
 | `-e, --epochs <n>` | Storage epochs for new files | Prompted (1 if `-y`) |
-| `-y, --yes`        | Skip confirmation prompts    | `false`  |
-| `--json`           | Output JSON only             | `false`  |
+| `-y, --yes`        | Skip confirmation prompts    | `false`              |
+| `--json`           | Output JSON only             | `false`              |
 
 ### Examples
 
@@ -312,14 +312,14 @@ Create `.versui` at project root to customize behavior.
 
 ## Environment Variables
 
-| Variable                       | Description                               |
-| ------------------------------ | ----------------------------------------- |
-| `VERSUI_PACKAGE_ID_TESTNET`    | Override Versui package ID (testnet)      |
-| `VERSUI_PACKAGE_ID_MAINNET`    | Override Versui package ID (mainnet)      |
-| `VERSUI_OBJECT_ID_TESTNET`     | Override registry object ID (testnet)     |
-| `VERSUI_OBJECT_ID_MAINNET`     | Override registry object ID (mainnet)     |
-| `DOMAIN_REGISTRY_ID_TESTNET`   | Override domain registry ID (testnet)     |
-| `DOMAIN_REGISTRY_ID_MAINNET`   | Override domain registry ID (mainnet)     |
+| Variable                     | Description                           |
+| ---------------------------- | ------------------------------------- |
+| `VERSUI_PACKAGE_ID_TESTNET`  | Override Versui package ID (testnet)  |
+| `VERSUI_PACKAGE_ID_MAINNET`  | Override Versui package ID (mainnet)  |
+| `VERSUI_OBJECT_ID_TESTNET`   | Override registry object ID (testnet) |
+| `VERSUI_OBJECT_ID_MAINNET`   | Override registry object ID (mainnet) |
+| `DOMAIN_REGISTRY_ID_TESTNET` | Override domain registry ID (testnet) |
+| `DOMAIN_REGISTRY_ID_MAINNET` | Override domain registry ID (mainnet) |
 
 ---
 
