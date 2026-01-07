@@ -217,6 +217,24 @@ describe('update command', () => {
       assert.deepStrictEqual(result.deleted, [])
       assert.deepStrictEqual(result.unchanged, ['/dir/file name.html'])
     })
+
+    it('should filter out undefined paths from existing resources', () => {
+      const local_files = {
+        '/index.html': { hash: 'hash1', size: 100, content_type: 'text/html' },
+      }
+      // Existing resources map should never have undefined keys after filtering
+      const existing_resources = new Map([
+        ['/index.html', { blob_id: 'blob1', hash: 'hash1', size: 100 }],
+      ])
+
+      const result = compare_files(local_files, existing_resources)
+
+      // undefined should not appear in deleted array
+      assert.deepStrictEqual(result.deleted, [])
+      assert.deepStrictEqual(result.unchanged, ['/index.html'])
+      assert.strictEqual(result.added.includes(undefined), false)
+      assert.strictEqual(result.deleted.includes(undefined), false)
+    })
   })
 
   describe('build_update_transaction', () => {

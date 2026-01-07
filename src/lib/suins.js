@@ -174,13 +174,9 @@ export function normalize_suins_name(name) {
   return `${trimmed}.sui`
 }
 
-// SuiNS NFT type for querying owned names
-const SUINS_NFT_TYPE =
-  '0x22fa05f21b1ad71442571f3a9b954581d59c8d06ee20e828f8a4fdebe79ac716::suins_registration::SuinsRegistration'
-
 /**
  * Get all SuiNS names owned by a wallet address
- * Queries owned objects of SuiNS NFT type and extracts names
+ * Uses SuiClient.resolveNameServiceNames() to query owned names
  * @param {string} wallet_address - Sui wallet address
  * @param {Object} [deps] - Injectable dependencies
  * @param {import('@mysten/sui/client').SuiClient} [deps.sui_client] - Sui client
@@ -195,35 +191,21 @@ export async function get_owned_suins_names(
     sui_client ?? new SuiClient({ url: getFullnodeUrl(network) })
 
   try {
-    // Query all SuiNS NFT objects owned by the wallet
-    const { data: objects } = await effective_client.getOwnedObjects({
-      owner: wallet_address,
-      filter: { StructType: SUINS_NFT_TYPE },
-      options: { showContent: true },
-    })
+    const all_names = []
+    let cursor = null
 
-    const now = Date.now()
-    const names = []
+    // Paginate through all owned names
+    do {
+      const result = await effective_client.resolveNameServiceNames({
+        address: wallet_address,
+        cursor,
+      })
 
-    for (const obj of objects) {
-      const { content } = obj.data ?? {}
-      if (content?.dataType !== 'moveObject') continue
+      all_names.push(...(result.data ?? []))
+      cursor = result.hasNextPage ? result.nextCursor : null
+    } while (cursor)
 
-      const { domain_name, expiration_timestamp_ms: exp_ms } =
-        /** @type {{ domain_name?: string, expiration_timestamp_ms?: string | number }} */ (
-          content.fields
-        ) ?? {}
-      const expiration_timestamp_ms = Number(exp_ms ?? 0)
-
-      // Skip expired names
-      if (expiration_timestamp_ms < now) continue
-
-      if (domain_name) {
-        names.push(`${domain_name}.sui`)
-      }
-    }
-
-    return names
+    return all_names
   } catch {
     return []
   }

@@ -13,6 +13,7 @@ import {
   get_original_package_id,
   get_version_object_id,
 } from '../lib/env.js'
+import { dry_run_transaction, resolve_site_id } from '../lib/sui.js'
 
 import { validate_directory, check_prerequisites } from './deploy/validate.js'
 import { build_files_metadata } from './deploy/file-metadata.js'
@@ -268,6 +269,7 @@ async function upload_files_to_walrus(dir, file_paths, epochs) {
  * @param {string[]} params.deleted_paths - Paths of deleted files
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
+ * @param {string|null} params.blob_object_id - Walrus blob object ID for renewal tracking
  * @param {string} params.network - Network name (testnet/mainnet)
  * @returns {Transaction}
  */
@@ -282,6 +284,7 @@ export function build_update_transaction({
   deleted_paths,
   patches,
   file_metadata,
+  blob_object_id,
   network,
 }) {
   const tx = new Transaction()
@@ -311,7 +314,7 @@ export function build_update_transaction({
   for (const path of added_paths) {
     const info = file_metadata[path]
     const patch_id = patch_map.get(path)
-    if (!info || !patch_id) continue
+    if (!info || !patch_id || !blob_object_id) continue
 
     tx.moveCall({
       target: `${package_id}::site::add_resource`,
@@ -332,7 +335,7 @@ export function build_update_transaction({
   for (const path of updated_paths) {
     const info = file_metadata[path]
     const patch_id = patch_map.get(path)
-    if (!info || !patch_id) continue
+    if (!info || !patch_id || !blob_object_id) continue
 
     tx.moveCall({
       target: `${package_id}::site::update_resource`,
@@ -368,7 +371,7 @@ export function build_update_transaction({
  * Update an existing site with new files
  * @param {string} dir - Directory to deploy
  * @param {Object} [options] - Command options
- * @param {string} [options.site] - Site object ID
+ * @param {string} [options.site] - Site ID (0x...) or site name
  * @param {string} [options.network] - Network (testnet|mainnet)
  * @param {number} [options.epochs] - Storage epochs for new uploads
  * @param {boolean} [options.yes] - Skip confirmations
@@ -377,15 +380,15 @@ export function build_update_transaction({
  */
 export async function update(dir, options = {}) {
   const {
-    site: site_id,
+    site: site_identifier,
     network = 'testnet',
     epochs = 1,
     json: json_mode = false,
   } = options
 
   // Validate inputs
-  if (!site_id) {
-    throw new Error('Site ID is required. Use --site <site-id>')
+  if (!site_identifier) {
+    throw new Error('Site ID or name is required. Use --site <site-id-or-name>')
   }
 
   if (!validate_directory(dir)) {
@@ -422,9 +425,19 @@ export async function update(dir, options = {}) {
 
   // Start spinner
   const spinner = ora({
-    text: 'Fetching site data...',
+    text: 'Resolving site...',
     isSilent: json_mode || !process.stdout.isTTY,
   }).start()
+
+  // Resolve site identifier to site ID
+  const site_id = await resolve_site_id(
+    site_identifier,
+    sui_client,
+    wallet,
+    network,
+  )
+
+  spinner.text = 'Fetching site data...'
 
   // Find AdminCap
   const admin_cap_id = await find_admin_cap(
@@ -515,7 +528,11 @@ export async function update(dir, options = {}) {
     }
   }
 
-  const { patches } = await upload_files_to_walrus(dir, files_to_upload, epochs)
+  const { patches, blob_object_id } = await upload_files_to_walrus(
+    dir,
+    files_to_upload,
+    epochs,
+  )
 
   if (files_to_upload.length > 0 && !json_mode) {
     spinner.succeed(`Uploaded ${files_to_upload.length} files to Walrus`)
@@ -537,14 +554,29 @@ export async function update(dir, options = {}) {
     deleted_paths: diff.deleted,
     patches,
     file_metadata,
+    blob_object_id,
     network,
   })
+
+  if (!json_mode) {
+    spinner.succeed('Transaction built')
+    spinner.start('Checking cost (dry-run)...')
+  }
+
+  // Dry-run to estimate gas cost
+  const gas_estimate = await dry_run_transaction(tx, sui_client)
+
+  if (!json_mode) {
+    spinner.succeed(
+      `Cost: ${chalk.cyan((gas_estimate.totalCost / 1_000_000_000).toFixed(4))} SUI (dry-run)`,
+    )
+  }
 
   const tx_bytes = await tx.build({ client: sui_client })
   const tx_base64 = toBase64(tx_bytes)
 
   if (!json_mode) {
-    spinner.text = 'Executing update transaction...'
+    spinner.start('Executing update transaction...')
   }
 
   // Execute transaction
