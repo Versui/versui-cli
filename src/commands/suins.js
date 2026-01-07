@@ -15,6 +15,9 @@ import {
   get_suins_client,
 } from '../lib/suins.js'
 import { get_versui_package_id, get_original_package_id } from '../lib/env.js'
+import { resolve_site_id } from '../lib/sui.js'
+
+import { render_suins_ui } from './suins/ui/render.js'
 
 /**
  * Get active Sui network from CLI
@@ -106,151 +109,31 @@ async function get_user_sites(address, client, original_package_id) {
  * Add (link) a SuiNS name to a site
  * @param {string} name - SuiNS name (e.g., "mysite.sui" or "@mysite")
  * @param {Object} options - Command options
- * @param {string} [options.site] - Site object ID
+ * @param {string} [options.site] - Site ID (0x...) or site name
  * @param {'mainnet' | 'testnet'} [options.network] - Network (testnet|mainnet)
+ * @param {boolean} [options.yes] - Skip confirmations
  */
 export async function suins_add(name, options = {}) {
-  const spinner = ora()
-
   try {
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = get_versui_package_id(network)
-    const original_package_id = get_original_package_id(network)
 
-    if (!package_id) {
-      throw new Error(`Versui not deployed on ${network}`)
-    }
-
-    if (!original_package_id) {
-      throw new Error(
-        `Original Versui package not found on ${network}. Cannot query existing objects.`,
-      )
-    }
-
-    const sui_client = new SuiClient({
-      url: getFullnodeUrl(/** @type {any} */ (network)),
-    })
-    const suins_client = get_suins_client({
-      client: sui_client,
-      network,
-    })
-
-    const normalized = normalize_suins_name(name)
-
-    // Validate ownership
-    spinner.start(`Validating ownership of ${normalized}...`)
-    const ownership = await validate_domain_ownership(normalized, address, {
-      suins_client,
-      sui_client,
-    })
-
-    if (!ownership.valid) {
-      spinner.fail('Ownership validation failed')
-      throw new Error(ownership.error)
-    }
-    spinner.succeed(`You own ${normalized}`)
-
-    // Get or prompt for site ID
+    // Resolve site if provided
     let site_id = options.site
-    if (!site_id) {
-      spinner.start('Finding your sites...')
-      const sites = await get_user_sites(
-        address,
-        sui_client,
-        original_package_id,
-      )
-      spinner.stop()
-
-      if (sites.length === 0) {
-        throw new Error(
-          'No sites found. Deploy a site first with: versui deploy',
-        )
-      }
-
-      const site_choices = sites.map(({ id, name: site_name }) => ({
-        title: `${site_name} (${id.slice(0, 10)}...)`,
-        value: id,
-      }))
-
-      const { site_id: selected_site_id } = await prompts({
-        type: 'select',
-        name: 'site_id',
-        message: 'Select site to link:',
-        choices: site_choices,
+    if (site_id) {
+      const client = new SuiClient({
+        url: getFullnodeUrl(/** @type {any} */ (network)),
       })
-
-      if (!selected_site_id) {
-        console.log(chalk.gray('  Cancelled.'))
-        return
-      }
-
-      site_id = selected_site_id
+      site_id = await resolve_site_id(site_id, client, address, network)
     }
 
-    // Get site info for display
-    spinner.start('Querying site...')
-    const site_info = await get_site_info(site_id, sui_client)
-    if (!site_info) {
-      spinner.fail('Site not found')
-      throw new Error(`Site ${site_id} not found`)
-    }
-    spinner.succeed(`Site: ${site_info.name}`)
-
-    // Build the link transaction
-    spinner.start('Building transaction...')
-    const result = await link_suins_to_site(normalized, site_id, {
-      suins_client,
+    await render_suins_ui({
+      name,
+      site: site_id,
+      network,
+      autoYes: options.yes,
     })
-
-    if (!result.success) {
-      spinner.fail('Failed to build transaction')
-      throw new Error(result.error)
-    }
-    spinner.succeed('Transaction built')
-
-    // Execute transaction
-    spinner.start('Executing transaction...')
-    result.transaction.setSender(address)
-    const tx_bytes = await result.transaction.build({ client: sui_client })
-    const tx_base64 = toBase64(tx_bytes)
-
-    const spawn_result = spawnSync(
-      'sui',
-      ['client', 'serialized-tx', tx_base64, '--json'],
-      {
-        encoding: 'utf8',
-        stdio: ['inherit', 'pipe', 'pipe'],
-      },
-    )
-
-    if (spawn_result.error) {
-      throw spawn_result.error
-    }
-
-    if (spawn_result.status !== 0) {
-      throw new Error(`sui command failed with status ${spawn_result.status}`)
-    }
-
-    const tx_result = JSON.parse(spawn_result.stdout)
-    const status = tx_result?.effects?.status?.status
-
-    if (status === 'success') {
-      spinner.succeed(chalk.green(`Linked ${normalized} to site!`))
-      console.log('')
-      console.log(
-        chalk.dim('  Access your site at: ') +
-          chalk.cyan(`https://${normalized.replace('.sui', '')}.suins.site`),
-      )
-      console.log('')
-    } else {
-      const error_msg =
-        tx_result?.effects?.status?.error || 'Transaction failed'
-      spinner.fail(chalk.red('Transaction failed'))
-      throw new Error(error_msg)
-    }
   } catch (error) {
-    if (spinner.isSpinning) spinner.stop()
     console.error('')
     console.error(chalk.red('  ✗ Error: ') + error.message)
     console.error('')

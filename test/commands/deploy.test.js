@@ -648,3 +648,105 @@ describe('deploy edge cases', () => {
     assert.ok(true) // Placeholder for integration test
   })
 })
+
+// === Error Handling - Name Already Taken ===
+describe('deploy name-taken error detection', () => {
+  it('detects MoveAbort with derived_object pattern', () => {
+    const error_text =
+      'Transaction execution failed: MoveAbort in module 0x123::site, error code: derived_object not found'
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(
+      pattern.test(error_text),
+      'Should detect MoveAbort with derived_object',
+    )
+  })
+
+  it('detects derived_object before MoveAbort pattern', () => {
+    const error_text =
+      'derived_object collision detected in MoveAbort transaction'
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(
+      pattern.test(error_text),
+      'Should detect derived_object before MoveAbort',
+    )
+  })
+
+  it('is case insensitive for error detection', () => {
+    const error_text_lower = 'moveabort with derived_object error'
+    const error_text_upper = 'MOVEABORT with DERIVED_OBJECT error'
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(
+      pattern.test(error_text_lower),
+      'Should detect lowercase moveabort',
+    )
+    assert.ok(
+      pattern.test(error_text_upper),
+      'Should detect uppercase MOVEABORT',
+    )
+  })
+
+  it('does not match MoveAbort without derived_object', () => {
+    const error_text = 'Transaction failed: MoveAbort in module 0x123::site'
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(
+      !pattern.test(error_text),
+      'Should NOT detect MoveAbort without derived_object',
+    )
+  })
+
+  it('does not match derived_object without MoveAbort', () => {
+    const error_text = 'Error: derived_object not found in storage'
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(
+      !pattern.test(error_text),
+      'Should NOT detect derived_object without MoveAbort',
+    )
+  })
+
+  it('does not match unrelated errors', () => {
+    const error_text = 'Network timeout error'
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(!pattern.test(error_text), 'Should NOT detect unrelated errors')
+  })
+
+  it('handles error from stderr property', () => {
+    const err = {
+      stderr: 'MoveAbort error: derived_object already exists',
+      message: 'Command failed',
+    }
+    const error_text = err.stderr || err.message || ''
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(pattern.test(error_text), 'Should use stderr when available')
+  })
+
+  it('handles error from message property when stderr is missing', () => {
+    const err = {
+      message: 'derived_object collision caused MoveAbort',
+    }
+    const error_text = err.stderr || err.message || ''
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(
+      pattern.test(error_text),
+      'Should fallback to message when stderr missing',
+    )
+  })
+
+  it('handles missing error properties gracefully', () => {
+    const err = {}
+    const error_text = err.stderr || err.message || ''
+    const pattern = /MoveAbort.*derived_object|derived_object.*MoveAbort/i
+
+    assert.ok(
+      !pattern.test(error_text),
+      'Should handle missing error properties',
+    )
+  })
+})

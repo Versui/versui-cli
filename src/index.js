@@ -75,14 +75,19 @@ program
   .alias('ls')
   .description('List your deployments')
   .option('--network <network>', 'sui network (testnet, mainnet)')
+  .option('--include-remnants', 'include incomplete/orphaned sites from aborted deploys')
   .action(list)
 
 program
   .command('delete')
   .description('Delete one or more site deployments')
-  .argument('<site-ids...>', 'site object ID(s) to delete')
+  .argument('[site-ids...]', 'site object ID(s) to delete')
   .option('-y, --yes', 'skip confirmation prompt')
   .option('--network <network>', 'sui network (testnet, mainnet)')
+  .option(
+    '--dangerously-delete-all',
+    'delete ALL owned sites and their resources',
+  )
   .action(delete_site)
 
 program

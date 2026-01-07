@@ -4,14 +4,14 @@
  */
 
 const V10_PACKAGE_ID =
-  '0xffbe43caf92501ccb688b16843eada8eab9fd7487cee77b2347d3fa83e619e4e'
+  '0xc3352e420352af5339cefd764c232e59553f02885628fdeb130e33cef7709ade'
 
 /**
- * Original package ID (V9 and earlier)
- * Used for type filtering since existing objects still reference this package
+ * Original package ID
+ * V10 is the only deployed contract - fresh deployments, no upgrade chain
+ * Set to same as V10_PACKAGE_ID since previous deployments are irrelevant
  */
-const ORIGINAL_PACKAGE_ID =
-  '0xffbe43caf92501ccb688b16843eada8eab9fd7487cee77b2347d3fa83e619e4e'
+const ORIGINAL_PACKAGE_ID = V10_PACKAGE_ID
 
 /**
  * Shared Versui registry object IDs by network
@@ -20,7 +20,7 @@ const ORIGINAL_PACKAGE_ID =
 const VERSUI_REGISTRY_IDS = {
   testnet:
     process.env.VERSUI_OBJECT_ID_TESTNET ||
-    '0x3efa58f79c62f8232532eaa9556313a618d4b519af3905c87d6ecc59950a3045',
+    '0x80ed579d585d60db342a9082b69671cbcd426acc8a96032fe923caba56b32ada',
   mainnet: process.env.VERSUI_OBJECT_ID_MAINNET || null,
 }
 
@@ -30,7 +30,7 @@ const VERSUI_REGISTRY_IDS = {
 const DOMAIN_REGISTRY_IDS = {
   testnet:
     process.env.DOMAIN_REGISTRY_ID_TESTNET ||
-    '0x5a49320853b8bbb22c727ece89f0683684333081fcc7c4a7d28b992f640e4629',
+    '0x3bb74d3bba466dd8fb5e3c639929b0632472c9a0682d5659e2519525cd4ab13a',
   mainnet: process.env.DOMAIN_REGISTRY_ID_MAINNET || null,
 }
 
@@ -40,7 +40,7 @@ const DOMAIN_REGISTRY_IDS = {
 const VERSION_OBJECT_IDS = {
   testnet:
     process.env.VERSION_OBJECT_ID_TESTNET ||
-    '0x439cff7cc4d22ee778e59a24cd70a4c0ebf78a2db768b89c2cf4eccd909573a5',
+    '0x4dc11a416ea960e80034d2f1f554085016be14e0c81c1384eb0d19edd5e46e4a',
   mainnet: process.env.VERSION_OBJECT_ID_MAINNET || null,
 }
 
@@ -95,16 +95,13 @@ export function get_versui_package_id(network) {
 
 /**
  * Get original package ID for network (for type filtering)
- * Used to query objects that were created with the original package
+ * V10 is the only active deployment - returns same as get_versui_package_id()
  * @param {string} network - Network name (testnet|mainnet)
  * @returns {string|null} Original package ID or null if not deployed
  */
 export function get_original_package_id(network) {
-  // For now, only testnet has the original package deployed
-  if (network === 'testnet') {
-    return ORIGINAL_PACKAGE_ID
-  }
-  return null
+  // Returns same as V10_PACKAGE_ID (no upgrade chain)
+  return get_versui_package_id(network)
 }
 
 /**

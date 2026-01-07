@@ -5,6 +5,8 @@ import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import chalk from 'chalk'
 import prompts from 'prompts'
 import ora from 'ora'
+import gradient from 'gradient-string'
+import figlet from 'figlet'
 
 import {
   get_versui_package_id,
@@ -12,7 +14,9 @@ import {
   get_original_package_id,
   get_version_object_id,
 } from '../lib/env.js'
-import { get_site_id_by_name } from '../lib/sui.js'
+import { resolve_site_id } from '../lib/sui.js'
+
+import { render_delete_ui } from './delete/ui/render.js'
 
 /**
  * Execute sui client command asynchronously
@@ -52,13 +56,188 @@ function execute_sui_command(args) {
   })
 }
 
+
 /**
- * Validate Sui object ID format (0x followed by 64 hex chars)
- * @param {string} id - Object ID to validate
- * @returns {boolean} True if valid
+ * Delete all sites owned by the user
+ * @param {import('@mysten/sui/client').SuiClient} client - Sui client
+ * @param {string} network - Network name
+ * @param {string} address - Wallet address
+ * @param {Object} options - Command options
+ * @returns {Promise<void>}
  */
-function is_valid_sui_object_id(id) {
-  return /^0x[a-fA-F0-9]{64}$/.test(id)
+async function delete_all_sites(client, network, address, options) {
+  // Clear console and show header
+  process.stdout.write('\x1Bc')
+
+  const versui_gradient = gradient(['#4DA2FF', '#00D4FF', '#2DD4BF'])
+  const border_gradient = gradient(['#4DA2FF', '#2DD4BF'])
+
+  const logo = figlet.textSync('VERSUI', {
+    font: 'Small',
+    horizontalLayout: 'fitted',
+  })
+
+  const box_width = 60
+  const top_border = '╭' + '─'.repeat(box_width - 2) + '╮'
+  const bottom_border = '╰' + '─'.repeat(box_width - 2) + '╯'
+
+  console.log(border_gradient(top_border))
+
+  const logo_lines = logo.split('\n')
+  for (const line of logo_lines) {
+    const padding = box_width - 4 - line.length
+    const right_pad = padding > 0 ? padding : 0
+    console.log(
+      border_gradient('│ ') +
+        versui_gradient(line) +
+        border_gradient(' '.repeat(right_pad) + ' │'),
+    )
+  }
+
+  console.log(border_gradient('│' + ' '.repeat(box_width - 2) + '│'))
+
+  const tagline = 'Decentralized Site Hosting on Walrus + Sui'
+  const tagline_padding = box_width - 4 - tagline.length
+  const tagline_right_pad = tagline_padding > 0 ? tagline_padding : 0
+  console.log(
+    border_gradient('│ ') +
+      chalk.dim(tagline) +
+      border_gradient(' '.repeat(tagline_right_pad) + ' │'),
+  )
+
+  console.log(border_gradient(bottom_border))
+  console.log('')
+
+  const spinner = ora('Fetching all owned sites...').start()
+
+  try {
+    // Get all AdminCaps (same logic as list command)
+    const original_package_id = get_original_package_id(network)
+    if (!original_package_id) {
+      spinner.fail(`Original Versui package not found on ${network}`)
+      throw new Error(
+        `Original Versui package not found on ${network}. Cannot query AdminCaps.`,
+      )
+    }
+
+    const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
+    const admin_caps = await client.getOwnedObjects({
+      owner: address,
+      filter: {
+        StructType: admin_cap_type,
+      },
+      options: {
+        showContent: true,
+      },
+    })
+
+    // Extract site IDs from AdminCaps
+    const site_ids = []
+    for (const item of admin_caps.data) {
+      if (!item.data?.content) continue
+      const { fields } = /** @type {any} */ (item.data.content)
+      site_ids.push(fields.site_id)
+    }
+
+    if (site_ids.length === 0) {
+      spinner.succeed('No sites found to delete')
+      console.log('')
+      console.log(chalk.gray('  You have no sites on this network.'))
+      console.log('')
+      return
+    }
+
+    // Count total resources across all sites
+    let total_resources = 0
+    for (const site_id of site_ids) {
+      const site_obj = await client.getObject({
+        id: site_id,
+        options: { showContent: true },
+      })
+
+      if (!site_obj?.data?.content) continue
+      const { fields: site_fields } = /** @type {any} */ (site_obj.data.content)
+      const resources_table_id = site_fields.resources?.fields?.id?.id
+
+      if (resources_table_id) {
+        let has_next_page = true
+        let cursor = null
+        while (has_next_page) {
+          const resources_response = await client.getDynamicFields({
+            parentId: resources_table_id,
+            cursor,
+          })
+          total_resources += resources_response.data.length
+          has_next_page = resources_response.hasNextPage
+          cursor = resources_response.nextCursor
+        }
+      }
+    }
+
+    spinner.succeed(
+      `Found ${site_ids.length} site(s) with ${total_resources} resource(s)`,
+    )
+
+    // Show warning and require explicit confirmation
+    console.log('')
+    console.log(chalk.red.bold('⚠️  DANGER ZONE: DELETE ALL SITES'))
+    console.log('')
+    console.log(
+      chalk.yellow('  This will permanently delete ALL sites and resources:'),
+    )
+    console.log('')
+    console.log(`  ${chalk.red('•')} Network: ${chalk.cyan(network)}`)
+    console.log(`  ${chalk.red('•')} Sites: ${chalk.cyan(site_ids.length)}`)
+    console.log(`  ${chalk.red('•')} Resources: ${chalk.cyan(total_resources)}`)
+    console.log('')
+    console.log(chalk.red('  This action CANNOT be undone!'))
+    console.log('')
+
+    // Double confirmation: first type exact phrase
+    const confirmation_phrase = `DELETE ALL ${site_ids.length} SITES`
+    const confirm1 = await prompts({
+      type: 'text',
+      name: 'value',
+      message: `Type "${confirmation_phrase}" to confirm:`,
+    })
+
+    if (confirm1.value !== confirmation_phrase) {
+      console.log('')
+      console.log(chalk.gray('  Deletion cancelled.'))
+      console.log('')
+      return
+    }
+
+    // Second confirmation: final yes/no
+    const confirm2 = await prompts({
+      type: 'confirm',
+      name: 'confirmed',
+      message: 'Are you absolutely sure?',
+      initial: false,
+    })
+
+    if (!confirm2.confirmed) {
+      console.log('')
+      console.log(chalk.gray('  Deletion cancelled.'))
+      console.log('')
+      return
+    }
+
+    // Proceed with deletion by calling delete_site with all IDs
+    console.log('')
+    console.log(chalk.dim('  Starting bulk deletion...'))
+    console.log('')
+
+    // Call the existing delete_site function with all site IDs and skip confirmation
+    await delete_site_batch(site_ids, {
+      ...options,
+      yes: true, // Skip confirmation since we already confirmed
+      network,
+    })
+  } catch (error) {
+    spinner.fail('Failed to fetch sites')
+    throw error
+  }
 }
 
 /**
@@ -129,14 +308,10 @@ export function is_valid_resource_path(path) {
  * @param {Object} options - Command options
  * @param {boolean} [options.yes] - Skip confirmation prompt
  * @param {string} [options.network] - Network (testnet|mainnet)
+ * @param {boolean} [options.dangerouslyDeleteAll] - Delete ALL owned sites
  * @returns {Promise<void>}
  */
 export async function delete_site(site_identifiers, options = {}) {
-  // Convert single identifier to array for uniform processing
-  const identifiers = Array.isArray(site_identifiers)
-    ? site_identifiers
-    : [site_identifiers]
-
   // Get network early for lookups
   const network = options.network || get_active_network()
   const address = get_active_address()
@@ -146,47 +321,65 @@ export async function delete_site(site_identifiers, options = {}) {
     url: getFullnodeUrl(/** @type {any} */ (network)),
   })
 
+  // Handle --dangerously-delete-all mode
+  if (options.dangerouslyDeleteAll) {
+    if (!options.network) {
+      throw new Error(
+        'The --dangerously-delete-all flag requires explicit --network flag for safety',
+      )
+    }
+
+    await delete_all_sites(client, network, address, options)
+    return
+  }
+
+  // Validate that site identifiers were provided
+  if (
+    !site_identifiers ||
+    (Array.isArray(site_identifiers) && site_identifiers.length === 0)
+  ) {
+    throw new Error(
+      'No site identifiers provided. Use site IDs/names or --dangerously-delete-all flag.',
+    )
+  }
+
+  // Call batch deletion
+  await delete_site_batch(site_identifiers, options)
+}
+
+/**
+ * Delete one or more site deployments (internal implementation)
+ * @param {string | string[]} site_identifiers - Site object ID(s) or name(s) to delete
+ * @param {Object} options - Command options
+ * @param {boolean} [options.yes] - Skip confirmation prompt
+ * @param {string} [options.network] - Network (testnet|mainnet)
+ * @returns {Promise<void>}
+ */
+async function delete_site_batch(site_identifiers, options = {}) {
+  // Get network early for lookups
+  const network = options.network || get_active_network()
+  const address = get_active_address()
+
+  // Create Sui client for lookups
+  const client = new SuiClient({
+    url: getFullnodeUrl(/** @type {any} */ (network)),
+  })
+
+  // Convert single identifier to array for uniform processing
+  const identifiers = Array.isArray(site_identifiers)
+    ? site_identifiers
+    : [site_identifiers]
+
   // Resolve all identifiers to site IDs
   const ids_to_delete = []
   const lookup_spinner = ora('Resolving site identifiers...').start()
 
   for (const identifier of identifiers) {
-    // If it looks like a Sui object ID, use directly
-    if (is_valid_sui_object_id(identifier)) {
-      ids_to_delete.push(identifier)
-      continue
-    }
-
-    // Otherwise, treat as site name and look up
-    const registry_id = get_versui_registry_id(network)
-    if (!registry_id) {
-      lookup_spinner.fail(
-        `Site name lookup not available on ${network} (registry not deployed)`,
-      )
-      throw new Error(
-        `Cannot resolve site name "${identifier}" - registry not available. Use site ID instead.`,
-      )
-    }
-
     try {
-      const site_id = await get_site_id_by_name(
-        client,
-        registry_id,
-        address,
-        identifier,
-        network,
-      )
-
-      if (!site_id) {
-        lookup_spinner.fail(`Site not found: "${identifier}"`)
-        throw new Error(
-          `No site found with name "${identifier}" owned by ${address}`,
-        )
-      }
-
+      const site_id = await resolve_site_id(identifier, client, address, network)
       ids_to_delete.push(site_id)
     } catch (error) {
-      lookup_spinner.fail(`Failed to resolve site name: "${identifier}"`)
+      lookup_spinner.fail(`Failed to resolve: "${identifier}"`)
       throw error
     }
   }
@@ -293,265 +486,46 @@ export async function delete_site(site_identifiers, options = {}) {
   )
 
   try {
-    // Confirmation prompt (unless --yes flag)
-    if (!options.yes) {
-      console.log('')
-      console.log(chalk.yellow('⚠️  Warning: This action cannot be undone!'))
-      console.log('')
-      console.log(`  Network: ${chalk.cyan(network)}`)
-      console.log(
-        `  Site${validated_sites.length > 1 ? 's' : ''} to delete: ${chalk.cyan(validated_sites.length)}`,
-      )
-      console.log('')
-      for (const { site_id } of validated_sites) {
-        console.log(`    ${chalk.dim(site_id)}`)
-      }
-      console.log('')
-
-      const response = await prompts({
-        type: 'confirm',
-        name: 'confirmed',
-        message: `Delete ${validated_sites.length} site${validated_sites.length > 1 ? 's' : ''}?`,
-        initial: false,
-      })
-
-      if (!response.confirmed) {
-        console.log('')
-        console.log(chalk.gray('  Deletion cancelled.'))
-        console.log('')
-        return
-      }
-    }
-
-    console.log('')
-
-    // Process each site deletion
-    for (let idx = 0; idx < validated_sites.length; idx++) {
-      const { site_id, admin_cap_id, site_obj } = validated_sites[idx]
-      const site_num = idx + 1
-      const total = validated_sites.length
-
-      console.log(
-        chalk.dim(
-          `[${site_num}/${total}] Deleting site: ${site_id.slice(0, 10)}...`,
-        ),
-      )
-
-      // Extract resources Table ID from Site object
+    // Collect resources for each validated site
+    const sites_with_resources = []
+    for (const { site_id, admin_cap_id, site_obj } of validated_sites) {
       const site_fields = /** @type {any} */ (site_obj.data.content).fields
       const resources_table_id = site_fields.resources?.fields?.id?.id
 
-      if (!resources_table_id) {
-        console.log(
-          chalk.yellow(`  ⚠ Skipping - failed to extract resources Table ID`),
-        )
-        continue
-      }
+      const resources = []
+      if (resources_table_id) {
+        let has_next_page = true
+        let cursor = null
 
-      // Query ALL resources with pagination (dynamic fields of the Table)
-      const res_spinner = ora('Checking site resources...').start()
-      const all_resources = []
-      let has_next_page = true
-      let cursor = null
-
-      while (has_next_page) {
-        res_spinner.text = `Checking site resources (${all_resources.length} found)...`
-        const resources_response = await client.getDynamicFields({
-          parentId: resources_table_id,
-          cursor,
-        })
-        all_resources.push(...resources_response.data)
-        has_next_page = resources_response.hasNextPage
-        cursor = resources_response.nextCursor
-      }
-
-      const resource_count = all_resources.length
-      res_spinner.succeed(`Found ${resource_count} resource(s)`)
-
-      // If site has resources, delete them first (batch operation)
-      let resources_deleted_successfully = false
-      if (resource_count > 0) {
-        // Collect all valid resource paths
-        const paths_to_delete = []
-        const invalid_paths = []
-
-        for (const resource of all_resources) {
-          const path = /** @type {string} */ (resource.name.value)
-
-          if (!is_valid_resource_path(path)) {
-            invalid_paths.push(path)
-            continue
-          }
-
-          paths_to_delete.push(path)
-        }
-
-        // Report invalid paths (if any)
-        if (invalid_paths.length > 0) {
-          console.log(
-            chalk.yellow(
-              `  ⚠ Skipping ${invalid_paths.length} invalid resource path(s) (contains shell metacharacters or invalid format)`,
-            ),
+        while (has_next_page) {
+          const resources_response = await client.getDynamicFields({
+            parentId: resources_table_id,
+            cursor,
+          })
+          resources.push(
+            ...resources_response.data.map(r => ({
+              path: /** @type {string} */ (r.name.value),
+            })),
           )
+          has_next_page = resources_response.hasNextPage
+          cursor = resources_response.nextCursor
         }
-
-        // Delete resources in batches (PTB limit is 1024 commands, use 50 for safety)
-        if (paths_to_delete.length > 0) {
-          const batch_size = 50
-          const total_batches = Math.ceil(paths_to_delete.length / batch_size)
-          let total_deleted = 0
-          const del_spinner = ora().start()
-
-          for (let i = 0; i < total_batches; i++) {
-            const batch_start = i * batch_size
-            const batch_end = Math.min(
-              batch_start + batch_size,
-              paths_to_delete.length,
-            )
-            const batch = paths_to_delete.slice(batch_start, batch_end)
-
-            del_spinner.text = `Deleting batch ${i + 1}/${total_batches}...`
-
-            try {
-              // Dynamic gas budget: 1M base + 1M per resource (min 50M)
-              const gas_budget = Math.max(
-                50_000_000,
-                1_000_000 + batch.length * 1_000_000,
-              )
-
-              const version_id = get_version_object_id(network)
-              if (!version_id) {
-                throw new Error(`Version object not deployed on ${network}`)
-              }
-
-              const result = await execute_sui_command([
-                'client',
-                'call',
-                '--package',
-                package_id,
-                '--module',
-                'site',
-                '--function',
-                'delete_resources_batch',
-                '--args',
-                version_id,
-                admin_cap_id,
-                site_id,
-                JSON.stringify(batch),
-                '--gas-budget',
-                gas_budget.toString(),
-              ])
-
-              if (!result.success) {
-                // Extract Move error from stderr
-                const error_detail =
-                  result.stderr.trim() || result.stdout.trim()
-                del_spinner.fail(
-                  `Failed to delete batch ${i + 1}/${total_batches}`,
-                )
-                console.log(chalk.yellow(`  Error details:`))
-                console.log(chalk.dim(`  ${error_detail}`))
-                // Don't set resources_deleted_successfully = true, break early
-                break
-              } else {
-                total_deleted += batch.length
-
-                // Only mark as successful if ALL batches completed
-                if (i === total_batches - 1) {
-                  resources_deleted_successfully = true
-                  del_spinner.succeed(
-                    `Deleted ${total_deleted} resource(s) in ${total_batches} batch${total_batches > 1 ? 'es' : ''}`,
-                  )
-                }
-              }
-            } catch (error) {
-              del_spinner.fail(
-                `Failed to delete batch ${i + 1}/${total_batches}: ${error.message}`,
-              )
-              // Don't set resources_deleted_successfully = true, break early
-              break
-            }
-          }
-
-          // Report final status if partial failure
-          if (!resources_deleted_successfully && total_deleted > 0) {
-            console.log(
-              chalk.yellow(
-                `  ⚠ Partially deleted ${total_deleted}/${paths_to_delete.length} resource(s)`,
-              ),
-            )
-          }
-        } else {
-          // No resources to delete, mark as successful
-          resources_deleted_successfully = true
-        }
-      } else {
-        // No resources found, mark as successful
-        resources_deleted_successfully = true
       }
 
-      // Only delete site if resources were successfully deleted (or there were none)
-      if (!resources_deleted_successfully) {
-        console.log(
-          chalk.yellow(
-            `  ⚠ Skipping site deletion - resources were not fully deleted`,
-          ),
-        )
-        continue
-      }
-
-      // Delete site using sui client call
-      const delete_spinner = ora('Deleting site...').start()
-
-      try {
-        const version_id = get_version_object_id(network)
-        if (!version_id) {
-          throw new Error(`Version object not deployed on ${network}`)
-        }
-
-        const result = await execute_sui_command([
-          'client',
-          'call',
-          '--package',
-          package_id,
-          '--module',
-          'site',
-          '--function',
-          'delete_site',
-          '--args',
-          version_id,
-          admin_cap_id,
-          site_id,
-          '--gas-budget',
-          '10000000',
-        ])
-
-        // Check for success BEFORE showing success message
-        if (result.success) {
-          delete_spinner.succeed(
-            chalk.green(`✓ Deleted: ${site_id.slice(0, 10)}...`),
-          )
-        } else {
-          // Extract Move error from stderr
-          const error_detail = result.stderr.trim() || result.stdout.trim()
-          delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
-          console.log(chalk.yellow(`  Error details:`))
-          console.log(chalk.dim(`  ${error_detail}`))
-        }
-      } catch (error) {
-        delete_spinner.fail(chalk.red(`✗ Failed: ${site_id.slice(0, 10)}...`))
-        console.log(chalk.yellow(`  Error: ${error.message}`))
-      }
+      sites_with_resources.push({
+        site_id,
+        admin_cap_id,
+        resources,
+      })
     }
 
-    // Summary
-    console.log('')
-    console.log(
-      chalk.green(
-        `  ✓ Deletion complete! Processed ${validated_sites.length} site${validated_sites.length > 1 ? 's' : ''}`,
-      ),
-    )
-    console.log('')
+    // Use Ink UI for deletion flow
+    await render_delete_ui({
+      site_ids: ids_to_delete,
+      validated_sites: sites_with_resources,
+      network,
+      autoYes: options.yes,
+    })
   } catch (error) {
     console.error('')
     console.error(chalk.red('  ✗ Error: ') + error.message)

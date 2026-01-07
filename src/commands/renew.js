@@ -5,6 +5,9 @@ import chalk from 'chalk'
 import ora from 'ora'
 import prompts from 'prompts'
 
+import { resolve_site_id } from '../lib/sui.js'
+import { render_renew_ui } from './renew/ui/render.js'
+
 /**
  * Get active wallet address from Sui CLI
  * @returns {string|null} Wallet address or null
@@ -104,7 +107,7 @@ async function extend_blob(blob_object_id, epochs) {
 
 /**
  * Renew storage for all blobs in a site
- * @param {string} site_id - Site object ID
+ * @param {string} site_identifier - Site ID (0x...) or site name
  * @param {Object} [options] - Command options
  * @param {string} [options.network] - Network (testnet|mainnet)
  * @param {number} [options.epochs] - Number of epochs to extend
@@ -112,7 +115,7 @@ async function extend_blob(blob_object_id, epochs) {
  * @param {boolean} [options.json] - JSON output mode
  * @returns {Promise<void>}
  */
-export async function renew(site_id, options = {}) {
+export async function renew(site_identifier, options = {}) {
   const {
     network = 'testnet',
     yes: auto_yes = false,
@@ -120,9 +123,9 @@ export async function renew(site_id, options = {}) {
   } = options
   let { epochs } = options
 
-  // Validate site ID
-  if (!site_id) {
-    throw new Error('Site ID is required. Use: versui renew <site-id>')
+  // Validate site identifier
+  if (!site_identifier) {
+    throw new Error('Site ID or name is required. Use: versui renew <site-id-or-name>')
   }
 
   // Check wallet
@@ -134,10 +137,31 @@ export async function renew(site_id, options = {}) {
   const rpc_url = getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet')
   const sui_client = new SuiClient({ url: rpc_url })
 
+  // Resolve site identifier to site ID
   const spinner = ora({
-    text: 'Fetching site blob objects...',
+    text: 'Resolving site...',
     isSilent: json_mode || !process.stdout.isTTY,
   }).start()
+
+  const site_id = await resolve_site_id(
+    site_identifier,
+    sui_client,
+    wallet,
+    network,
+  )
+
+  // Use Ink UI if not in JSON mode and TTY available
+  if (!json_mode && process.stdout.isTTY) {
+    spinner.stop()
+    return render_renew_ui({
+      site_id,
+      network,
+      epochs,
+      auto_yes,
+    })
+  }
+
+  spinner.text = 'Fetching site blob objects...'
 
   // Fetch blob object IDs
   const blob_object_ids = await fetch_site_blob_objects(site_id, sui_client)

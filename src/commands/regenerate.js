@@ -1,20 +1,41 @@
+import { execSync } from 'node:child_process'
+
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client'
 import prompts from 'prompts'
 
 import { generate_bootstrap } from '../lib/generate.js'
 import { generate_sw_snippet } from '../lib/sw.js'
 import { read_versui_config, get_aggregators } from '../lib/config.js'
+import { resolve_site_id } from '../lib/sui.js'
+
+/**
+ * Get active wallet address from Sui CLI
+ * @returns {string} Wallet address
+ */
+function get_active_address() {
+  try {
+    const output = execSync('sui client active-address', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    })
+    return output.trim()
+  } catch {
+    throw new Error(
+      'Could not get active wallet address. Run: sui client active-address',
+    )
+  }
+}
 
 /**
  * Regenerate bootstrap or SW snippet for an existing site
- * @param {string} site_id - Site object ID
+ * @param {string} site_identifier - Site ID (0x...) or site name
  * @param {Object} options - Command options
  * @param {string} [options.network] - Network (testnet|mainnet)
  * @param {Object} [options.client] - Sui client (for testing)
  * @param {Function} [options.prompts_fn] - Prompts function (for testing)
  * @returns {Promise<Object>} Regeneration result
  */
-export async function regenerate(site_id, options = {}) {
+export async function regenerate(site_identifier, options = {}) {
   const { network = 'testnet', client, prompts_fn = prompts } = options
 
   // Create Sui client
@@ -23,6 +44,15 @@ export async function regenerate(site_id, options = {}) {
     new SuiClient({
       url: getFullnodeUrl(network === 'mainnet' ? 'mainnet' : 'testnet'),
     })
+
+  // Resolve site identifier to site ID
+  const address = get_active_address()
+  const site_id = await resolve_site_id(
+    site_identifier,
+    sui_client,
+    address,
+    network,
+  )
 
   // Fetch site object
   const site_obj = await sui_client.getObject({
@@ -54,15 +84,21 @@ export async function regenerate(site_id, options = {}) {
     cursor = page.nextCursor
   }
 
-  // Fetch resource details
+  // Fetch resource details (batch in chunks of 50 due to RPC limit)
   const resource_ids = resources.map(r => r.objectId)
-  const resource_objects =
-    resource_ids.length > 0
-      ? await sui_client.multiGetObjects({
-          ids: resource_ids,
-          options: { showContent: true },
-        })
-      : []
+  const resource_objects = []
+
+  if (resource_ids.length > 0) {
+    const BATCH_SIZE = 50
+    for (let i = 0; i < resource_ids.length; i += BATCH_SIZE) {
+      const batch = resource_ids.slice(i, i + BATCH_SIZE)
+      const batch_results = await sui_client.multiGetObjects({
+        ids: batch,
+        options: { showContent: true },
+      })
+      resource_objects.push(...batch_results)
+    }
+  }
 
   // Build resource map
   /** @type {Object<string, string>} */

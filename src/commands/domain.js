@@ -12,13 +12,11 @@ import {
   get_versui_package_id,
   get_original_package_id,
   get_version_object_id,
+  get_domain_registry_id,
 } from '../lib/env.js'
+import { resolve_site_id } from '../lib/sui.js'
 
-// DomainRegistry shared object IDs (deployed via domain_registry.move init)
-const DOMAIN_REGISTRY_IDS = {
-  testnet: '0xf649349301a66cb793ed2b00daff426b458d200bd987e20c73b0b7a9c907cc50',
-  mainnet: null,
-}
+import { render_domain_add_ui } from './domain/ui/render.js'
 
 // Clock object (shared by Sui framework)
 const CLOCK_OBJECT_ID = '0x6'
@@ -198,168 +196,31 @@ async function execute_transaction(tx, client) {
  * Add custom domain to a site
  * @param {string} domain - Domain to add (e.g., "example.com")
  * @param {Object} options - Command options
- * @param {string} [options.site] - Site object ID
+ * @param {string} [options.site] - Site ID (0x...) or site name
  * @param {string} [options.network] - Network (testnet|mainnet)
  */
 export async function domain_add(domain, options = {}) {
-  const spinner = ora()
-
   try {
-    // Validate domain format
-    const validation = validate_domain_format(domain)
-    if (!validation.valid) {
-      throw new Error(validation.error)
-    }
-
     // Get network and wallet
     const network = options.network || get_active_network()
     const address = get_active_address()
-    const package_id = get_versui_package_id(network)
-    const original_package_id = get_original_package_id(network)
-    const registry_id = DOMAIN_REGISTRY_IDS[network]
 
-    if (!package_id) {
-      throw new Error(`Versui not deployed on ${network}`)
-    }
-
-    if (!original_package_id) {
-      throw new Error(
-        `Original Versui package not found on ${network}. Cannot query existing objects.`,
-      )
-    }
-
-    if (!registry_id) {
-      throw new Error(
-        `DomainRegistry not configured for ${network}. Set DOMAIN_REGISTRY_ID env var.`,
-      )
-    }
-
-    // Create Sui client
-    const client = new SuiClient({
-      url: getFullnodeUrl(/** @type {any} */ (network)),
-    })
-
-    // Get or prompt for site ID
+    // Resolve site if provided
     let site_id = options.site
-    if (!site_id) {
-      // List user's sites and let them choose
-      spinner.start('Finding your sites...')
-      const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
-      const admin_caps = await client.getOwnedObjects({
-        owner: address,
-        filter: { StructType: admin_cap_type },
-        options: { showContent: true },
+    if (site_id) {
+      const client = new SuiClient({
+        url: getFullnodeUrl(/** @type {any} */ (network)),
       })
-      spinner.stop()
-
-      if (admin_caps.data.length === 0) {
-        throw new Error(
-          'No sites found. Deploy a site first with: versui deploy',
-        )
-      }
-
-      // Get site names for display
-      const site_choices = []
-      for (const cap of admin_caps.data) {
-        const cap_site_id = /** @type {any} */ (cap.data?.content)?.fields
-          ?.site_id
-        if (!cap_site_id) continue
-
-        const site_name = await get_site_name(cap_site_id, client)
-        site_choices.push({
-          title: `${site_name || 'Unnamed'} (${cap_site_id.slice(0, 10)}...)`,
-          value: cap_site_id,
-        })
-      }
-
-      const { site_id: selected_site_id } = await prompts({
-        type: 'select',
-        name: 'site_id',
-        message: 'Select site to link domain:',
-        choices: site_choices,
-      })
-
-      if (!selected_site_id) {
-        console.log(chalk.gray('  Cancelled.'))
-        return
-      }
-
-      site_id = selected_site_id
+      site_id = await resolve_site_id(site_id, client, address, network)
     }
 
-    // Get site name
-    spinner.start('Querying site...')
-    const site_name = await get_site_name(site_id, client)
-    if (!site_name) {
-      spinner.fail('Site not found')
-      throw new Error(`Site ${site_id} not found`)
-    }
-    spinner.succeed(`Site: ${site_name}`)
-
-    // Find AdminCap
-    spinner.start('Finding AdminCap...')
-    const admin_cap_id = await find_admin_cap(
-      site_id,
+    // Use Ink UI
+    await render_domain_add_ui(domain, {
+      site: site_id,
+      network,
       address,
-      client,
-      original_package_id,
-    )
-    if (!admin_cap_id) {
-      spinner.fail('AdminCap not found')
-      throw new Error(
-        `You don't have admin access to site ${site_id}. AdminCap not found.`,
-      )
-    }
-    spinner.succeed('AdminCap found')
-
-    // Build transaction
-    spinner.start('Building transaction...')
-    const tx = new Transaction()
-    tx.setSender(address)
-
-    const version_id = get_version_object_id(network)
-    if (!version_id) {
-      throw new Error(`Version object not deployed on ${network}`)
-    }
-
-    tx.moveCall({
-      target: `${package_id}::domain_registry::add_custom_domain`,
-      arguments: [
-        tx.object(version_id),
-        tx.object(registry_id),
-        tx.object(admin_cap_id),
-        tx.object(site_id),
-        tx.pure.string(domain),
-        tx.object(CLOCK_OBJECT_ID),
-      ],
     })
-    spinner.succeed('Transaction built')
-
-    // Execute transaction
-    spinner.start('Executing transaction...')
-    const result = await execute_transaction(tx, client)
-    const status = result?.effects?.status?.status
-
-    if (status === 'success') {
-      spinner.succeed(chalk.green('Domain registered!'))
-
-      // Show DNS instructions
-      console.log('')
-      console.log(chalk.cyan('  Configure your DNS:'))
-      console.log('')
-      console.log(chalk.dim('  Type:   ') + 'CNAME')
-      console.log(chalk.dim('  Name:   ') + '@ (or subdomain)')
-      console.log(chalk.dim('  Target: ') + 'versui.app')
-      console.log('')
-      console.log(chalk.yellow('  DNS propagation may take up to 48 hours.'))
-      console.log('')
-    } else {
-      const error_msg = result?.effects?.status?.error || 'Transaction failed'
-      spinner.fail(chalk.red('Transaction failed'))
-      throw new Error(error_msg)
-    }
   } catch (error) {
-    if (spinner.isSpinning) spinner.stop()
     console.error('')
     console.error(chalk.red('  ✗ Error: ') + error.message)
     console.error('')
@@ -371,7 +232,7 @@ export async function domain_add(domain, options = {}) {
  * Remove custom domain from a site
  * @param {string} domain - Domain to remove
  * @param {Object} options - Command options
- * @param {string} [options.site] - Site object ID
+ * @param {string} [options.site] - Site ID (0x...) or site name
  * @param {string} [options.network] - Network (testnet|mainnet)
  */
 export async function domain_remove(domain, options = {}) {
@@ -383,7 +244,7 @@ export async function domain_remove(domain, options = {}) {
     const address = get_active_address()
     const package_id = get_versui_package_id(network)
     const original_package_id = get_original_package_id(network)
-    const registry_id = DOMAIN_REGISTRY_IDS[network]
+    const registry_id = get_domain_registry_id(network)
 
     if (!package_id) {
       throw new Error(`Versui not deployed on ${network}`)
@@ -406,9 +267,9 @@ export async function domain_remove(domain, options = {}) {
       url: getFullnodeUrl(/** @type {any} */ (network)),
     })
 
-    // Get or prompt for site ID
-    let site_id = options.site
-    if (!site_id) {
+    // Get or prompt for site identifier
+    let site_identifier = options.site
+    if (!site_identifier) {
       // List user's sites and let them choose
       spinner.start('Finding your sites...')
       const admin_cap_type = `${original_package_id}::site::SiteAdminCap`
@@ -449,11 +310,20 @@ export async function domain_remove(domain, options = {}) {
         return
       }
 
-      site_id = selected_site_id
+      site_identifier = selected_site_id
     }
 
+    // Resolve site identifier to site ID
+    spinner.start('Resolving site...')
+    const site_id = await resolve_site_id(
+      site_identifier,
+      client,
+      address,
+      network,
+    )
+
     // Get site name
-    spinner.start('Querying site...')
+    spinner.text = 'Querying site...'
     const site_name = await get_site_name(site_id, client)
     if (!site_name) {
       spinner.fail('Site not found')
@@ -524,7 +394,7 @@ export async function domain_remove(domain, options = {}) {
 /**
  * List domains for a site (via DomainLinked events)
  * @param {Object} options - Command options
- * @param {string} [options.site] - Site object ID (optional, lists all if not provided)
+ * @param {string} [options.site] - Site ID (0x...) or site name (optional, lists all if not provided)
  * @param {string} [options.network] - Network (testnet|mainnet)
  */
 export async function domain_list(options = {}) {
@@ -551,6 +421,19 @@ export async function domain_list(options = {}) {
     const client = new SuiClient({
       url: getFullnodeUrl(/** @type {any} */ (network)),
     })
+
+    // Resolve site identifier if provided
+    let filter_site_id = options.site
+    if (filter_site_id) {
+      spinner.start('Resolving site...')
+      filter_site_id = await resolve_site_id(
+        filter_site_id,
+        client,
+        address,
+        network,
+      )
+      spinner.stop()
+    }
 
     // Get user's sites first
     spinner.start('Finding your sites...')
@@ -628,7 +511,7 @@ export async function domain_list(options = {}) {
       if (!user_site_ids.has(site_id)) continue
 
       // Skip if filtering by specific site
-      if (options.site && site_id !== options.site) continue
+      if (filter_site_id && site_id !== filter_site_id) continue
 
       // Skip if not owned by this wallet
       if (owner !== address) continue

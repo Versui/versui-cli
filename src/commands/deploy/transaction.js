@@ -71,6 +71,7 @@ export function create_site_transaction({
  * @param {string|number} params.initial_shared_version - Initial shared version of Site object
  * @param {Array<{identifier: string, quiltPatchId: string}>} params.quilt_patches - Walrus patches
  * @param {Record<string, {hash: string, size: number, content_type: string}>} params.file_metadata - File metadata
+ * @param {string} params.blob_object_id - Walrus blob object ID for renewal tracking
  * @param {string} params.network - Network (testnet|mainnet)
  * @returns {Transaction} Configured transaction object
  */
@@ -82,6 +83,7 @@ export function add_resources_transaction({
   initial_shared_version,
   quilt_patches,
   file_metadata,
+  blob_object_id,
   network,
 }) {
   const tx = new Transaction()

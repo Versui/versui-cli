@@ -1,4 +1,10 @@
-import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
+import {
+  existsSync,
+  readdirSync,
+  statSync,
+  readFileSync,
+  promises as fs,
+} from 'node:fs'
 import { join, relative, normalize, resolve } from 'node:path'
 
 import { minimatch } from 'minimatch'
@@ -10,6 +16,10 @@ export function get_content_type(file_path) {
 
 export function read_file(file_path) {
   return readFileSync(file_path)
+}
+
+export async function read_file_async(file_path) {
+  return fs.readFile(file_path)
 }
 
 export function sanitize_ignore_pattern(pattern, project_dir) {
@@ -121,5 +131,44 @@ export function scan_directory(dir, base_dir, ignore_patterns = null) {
       files.push(full_path)
     }
   }
+  return files
+}
+
+export async function scan_directory_async(
+  dir,
+  base_dir,
+  ignore_patterns = null,
+) {
+  if (ignore_patterns === null) {
+    const project_dir = join(dir, '..')
+    ignore_patterns = read_ignore_patterns(project_dir)
+  }
+
+  const files = []
+  const entries = await fs.readdir(dir)
+
+  for (const entry of entries) {
+    const full_path = join(dir, entry)
+    const rel_path = relative(base_dir, full_path)
+    if (should_ignore(rel_path, ignore_patterns)) continue
+
+    const stat = await fs.stat(full_path)
+    if (stat.isDirectory()) {
+      const sub_files = await scan_directory_async(
+        full_path,
+        base_dir,
+        ignore_patterns,
+      )
+      files.push(...sub_files)
+    } else if (stat.isFile()) {
+      files.push(full_path)
+    }
+
+    // Yield to event loop every 10 files to keep UI responsive
+    if (files.length % 10 === 0) {
+      await new Promise(resolve => setImmediate(resolve))
+    }
+  }
+
   return files
 }
